@@ -75,7 +75,7 @@ def parse_trade_file(path: str | Path) -> pd.DataFrame:
     if df.empty:
         return df
 
-    df["成交时间"] = pd.to_datetime(df["成交日期"] + " " + df["成交时间"])
+    df["成交时间"] = df["成交日期"] + " " + df["成交时间"]
     return df.drop(columns="成交日期")
 
 
