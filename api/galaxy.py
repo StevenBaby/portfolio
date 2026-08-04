@@ -101,20 +101,16 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
 def load_trades(trade_dir: str | Path = DEFAULT_TRADE_DIR) -> pd.DataFrame:
     """Load history and daily files, normalize, deduplicate, and sort trades."""
     directory = Path(trade_dir).expanduser()
-    paths = []
-
-    history = directory / "history.txt"
-    if history.is_file():
-        paths.append(history)
-    paths.extend(
-        path for path in sorted(directory.glob("????????.txt")) if path.stem.isdigit()
-    )
+    parsed_files = [
+        (path, parse_trade_file(path))
+        for path in directory.glob("*.txt")
+    ]
+    parsed_files.sort(key=lambda item: (-len(item[1].columns), item[0].name))
 
     frames = []
-    for path in paths:
-        df = parse_trade_file(path)
-        if not df.empty:
-            frames.append(_normalize(df))
+    for _, raw_df in parsed_files:
+        if not raw_df.empty:
+            frames.append(_normalize(raw_df))
 
     if not frames:
         return pd.DataFrame()

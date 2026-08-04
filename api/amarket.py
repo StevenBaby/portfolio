@@ -57,13 +57,16 @@ PRICE_FIELDS = {
 }
 
 
+REQUIRED_SINA_FIELDS = len(SINA_FIELDS) - 1
+
+
 def _parse_quote_line(line: str) -> dict | None:
     variable, separator, raw = line.partition("=")
     if not separator:
         return None
 
     values = raw.strip().removesuffix(";").strip('"').split(",")
-    if len(values) < len(SINA_FIELDS) or not values[0]:
+    if len(values) < REQUIRED_SINA_FIELDS or not values[0]:
         return None
 
     symbol = variable.removeprefix("var hq_str_")

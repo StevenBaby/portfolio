@@ -47,7 +47,7 @@ run:
 	docker run -d \
 		--name $(CONTAINER_NAME) \
 		--restart unless-stopped \
-		-p $(HOST_PORT):80 \
+		-p 127.0.0.1:$(HOST_PORT):80 \
 		-v $$(pwd)/trade:/app/trade:ro \
 		$(FULL_IMAGE_NAME)
 
