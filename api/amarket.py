@@ -122,7 +122,20 @@ def compute_daily_market_value(trades, repo_codes: set[str]) -> dict[str, dict[s
 
     securities = trades[~trades["code"].isin(repo_codes)].copy()
     securities["date"] = securities["datetime"].str.split(" ").str[0]
-    dates = sorted(set(securities["date"]))
+    trade_dates = set(securities["date"])
+    close_by_code = {}
+    for code in securities["code"].unique():
+        try:
+            close_by_code[code] = get_daily_closes(code)
+        except requests.RequestException:
+            close_by_code[code] = {}
+    first_trade_date = min(trade_dates)
+    all_close_dates = {
+        date for closes in close_by_code.values() for date in closes
+    }
+    dates = sorted((trade_dates | all_close_dates) - {
+        date for date in all_close_dates if date < first_trade_date
+    })
     result = {date: {} for date in dates}
 
     for code, code_trades in securities.groupby("code"):
@@ -132,11 +145,7 @@ def compute_daily_market_value(trades, repo_codes: set[str]) -> dict[str, dict[s
             shares += trade.quantity if trade.side == "买入" else -trade.quantity
             daily_shares[trade.date] = shares
 
-        try:
-            closes = get_daily_closes(code)
-        except requests.RequestException:
-            closes = {}
-
+        closes = close_by_code.get(code, {})
         shares = 0
         for date in dates:
             shares = daily_shares.get(date, shares)

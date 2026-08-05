@@ -96,32 +96,86 @@ export function getTradeType(record) {
  * 按日期+品种聚合交易金额，用于直方图
  * 返回 { dates: [...], series: [{ name, data: [...] }] }
  */
-export function aggregateByDate(trades, metric = "amount") {
-  const dateSet = new Set();
+export function aggregateByDate(trades, metric = "amount", calculationTrades = trades, dailyMarketValue = {}) {
   const byCode = {};
+  const costByCode = {};
+  const snapshots = {};
+  const cashFlowByCode = {};
 
-  for (const t of trades) {
-    if (isReverseRepo(t.code)) continue
-    const date = t.datetime.split(" ")[0]
-    dateSet.add(date)
-    if (!byCode[t.code]) byCode[t.code] = { name: t.name, data: {} }
-    let val
-    if (metric === 'amount') {
-      val = t.side === '买入' ? t.amount + t.fee : -(t.amount - t.fee)
-    } else if (metric === 'quantity') {
-      val = t.side === '买入' ? t.quantity : -t.quantity
-    } else if (metric === 'fee') {
-      val = t.fee
+  const visibleCodes = new Set(trades.map((t) => t.code));
+  const isPnlMetric = metric === "daily_pnl" || metric === "cumulative_pnl";
+  const orderedTrades = [...(isPnlMetric ? calculationTrades : trades)]
+    .filter((t) => !isPnlMetric || visibleCodes.has(t.code))
+    .sort((a, b) => a.datetime.localeCompare(b.datetime));
+  for (const t of orderedTrades) {
+    if (isReverseRepo(t.code)) continue;
+    const date = t.datetime.split(" ")[0];
+    if (!byCode[t.code]) byCode[t.code] = { name: t.name, data: {} };
+    if (!costByCode[t.code]) costByCode[t.code] = { shares: 0, cost: 0, realized: 0 };
+    if (isPnlMetric) {
+      cashFlowByCode[t.code] ||= {};
+      cashFlowByCode[t.code][date] ||= 0;
+      cashFlowByCode[t.code][date] +=
+        t.side === "买入" ? -(t.amount + t.fee) : t.amount - t.fee;
     }
-    byCode[t.code].data[date] = (byCode[t.code].data[date] || 0) + val
+    let val = 0;
+    if (metric === "amount") {
+      val = t.side === "买入" ? t.amount + t.fee : -(t.amount - t.fee);
+    } else if (metric === "quantity") {
+      val = t.side === "买入" ? t.quantity : -t.quantity;
+    } else if (metric === "fee") {
+      val = t.fee;
+    } else if (metric === "daily_pnl" || metric === "cumulative_pnl") {
+      const position = costByCode[t.code];
+      if (t.side === "买入") {
+        position.shares += t.quantity;
+        position.cost += t.amount + t.fee;
+      } else {
+        const averageCost = position.shares > 0 ? position.cost / position.shares : 0;
+        position.realized += t.amount - averageCost * t.quantity - t.fee;
+        position.shares -= t.quantity;
+        position.cost = averageCost * position.shares;
+        if (position.shares === 0) position.cost = 0;
+      }
+      snapshots[t.code] ||= {};
+      snapshots[t.code][date] = {
+        shares: position.shares,
+        cost: position.cost,
+        realized: position.realized,
+      };
+    }
+    const visibleDate = trades.some((visible) => visible.datetime.split(" ")[0] === date);
+    if (visibleDate && metric !== "pnl") {
+      byCode[t.code].data[date] = (byCode[t.code].data[date] || 0) + val;
+    }
   }
 
-  const dates = [...dateSet].sort();
+  const dates = (isPnlMetric && Object.keys(dailyMarketValue).length)
+    ? Object.keys(dailyMarketValue).sort()
+    : [...new Set(trades.map((t) => t.datetime.split(" ")[0]))].sort();
+  if (isPnlMetric) {
+    for (const [code, info] of Object.entries(byCode)) {
+      let snapshot = { shares: 0, cost: 0, realized: 0 };
+      let previousMarketValue = 0;
+      for (const date of dates) {
+        snapshot = snapshots[code]?.[date] || snapshot;
+        const marketValue = dailyMarketValue[date.replace(/-/g, "")]?.[code] || 0;
+        const floating = marketValue - snapshot.cost;
+        if (metric === "cumulative_pnl") {
+          info.data[date] = snapshot.realized + floating;
+        } else {
+          const previousValue = previousMarketValue;
+          info.data[date] = marketValue - previousValue + (cashFlowByCode[code]?.[date] || 0);
+          previousMarketValue = marketValue;
+        }
+      }
+    }
+  }
+
   const series = Object.entries(byCode).map(([code, info]) => ({
     code,
     name: info.name,
     data: dates.map((d) => info.data[d] || 0),
   }));
-
   return { dates: dates.map(formatDate), series };
 }

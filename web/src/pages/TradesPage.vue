@@ -201,15 +201,17 @@ const API = import.meta.env.DEV ? "http://localhost:8090" : "";
 const hideAmount = persistedRef("trades_hideAmount", false);
 const subTab = persistedRef("trades_subTab", "table");
 const legendSelected = ref({});
-const chartMetric = persistedRef("trades_chartMetric", "amount");
+const chartMetric = persistedRef("trades_chartMetric_v3", "cumulative_pnl");
 const metricOptions = [
   { value: "amount", label: "金额" },
   { value: "quantity", label: "数量" },
   { value: "fee", label: "手续费" },
+  { value: "daily_pnl", label: "当日盈亏" },
+  { value: "cumulative_pnl", label: "累计盈亏" },
 ];
 
 function selectAllLegend() {
-  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value);
+  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value, props.trades, dailyMv.value);
   const sel = {};
   series.forEach((s) => {
     sel[s.name] = true;
@@ -218,7 +220,7 @@ function selectAllLegend() {
 }
 
 function clearAllLegend() {
-  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value);
+  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value, props.trades, dailyMv.value);
   const sel = {};
   series.forEach((s) => {
     sel[s.name] = false;
@@ -339,7 +341,9 @@ const filteredTrades = computed(() => {
 const chartOption = computed(() => {
   const { dates, series } = aggregateByDate(
     filteredTrades.value,
-    chartMetric.value
+    chartMetric.value,
+    props.trades,
+    dailyMv.value
   );
   const filteredSeries = series.filter((s) => s.data.some((v) => v !== 0));
   return {
@@ -408,8 +412,8 @@ async function loadDailyMv() {
 }
 watch(subTab, (v) => {
   if (
-    v === "line" &&
-    chartMetric.value === "amount" &&
+    (v === "line" || v === "chart") &&
+    (chartMetric.value === "amount" || chartMetric.value === "daily_pnl" || chartMetric.value === "cumulative_pnl") &&
     !Object.keys(dailyMv.value).length
   ) {
     loadDailyMv();
@@ -417,8 +421,8 @@ watch(subTab, (v) => {
 });
 watch(chartMetric, (v) => {
   if (
-    subTab.value === "line" &&
-    v === "amount" &&
+    (subTab.value === "line" || subTab.value === "chart") &&
+    (v === "amount" || v === "daily_pnl" || v === "cumulative_pnl") &&
     !Object.keys(dailyMv.value).length
   ) {
     loadDailyMv();
@@ -426,8 +430,8 @@ watch(chartMetric, (v) => {
 });
 onMounted(() => {
   if (
-    subTab.value === "line" &&
-    chartMetric.value === "amount" &&
+    (subTab.value === "line" || subTab.value === "chart") &&
+    (chartMetric.value === "amount" || chartMetric.value === "daily_pnl" || chartMetric.value === "cumulative_pnl") &&
     !Object.keys(dailyMv.value).length
   ) {
     loadDailyMv();
@@ -437,7 +441,9 @@ onMounted(() => {
 const lineChartOption = computed(() => {
   const { dates, series } = aggregateByDate(
     filteredTrades.value,
-    chartMetric.value
+    chartMetric.value,
+    props.trades,
+    dailyMv.value
   );
 
   let cumSeries;
@@ -445,11 +451,14 @@ const lineChartOption = computed(() => {
     // 金额模式: 每日收盘市值 = 累计持仓 × 当日收盘价
     cumSeries = series.map((s) => ({
       name: s.name,
-      data: dates.map((d, i) => {
+      data: dates.map((d) => {
         const formatted = d.replace(/-/g, "");
         return dailyMv.value[formatted]?.[s.code] || 0;
       }),
     }));
+  } else if (chartMetric.value === "daily_pnl" || chartMetric.value === "cumulative_pnl") {
+    // 盈亏模式已经是每日收盘市值减移动平均持仓成本的快照。
+    cumSeries = series;
   } else {
     // 数量/手续费: 累计值
     cumSeries = series.map((s) => {
