@@ -96,3 +96,50 @@ def get_quotes(codes: list[str]) -> list[dict]:
         for line in response.content.decode("gbk").splitlines()
         if (quote := _parse_quote_line(line))
     ]
+
+
+def get_daily_closes(code: str) -> dict[str, float]:
+    """Fetch up to 200 daily closing prices from Sina."""
+    market = "sh" if code[0] in "569" else "sz"
+    response = requests.get(
+        "https://quotes.sina.cn/cn/api/json_v2.php/"
+        "CN_MarketDataService.getKLineData",
+        params={"symbol": f"{market}{code}", "scale": 240, "datalen": 200},
+        headers={"Referer": "https://finance.sina.com.cn"},
+        timeout=15,
+    )
+    response.raise_for_status()
+    return {
+        item["day"][:10].replace("-", ""): float(item["close"])
+        for item in response.json() or []
+    }
+
+
+def compute_daily_market_value(trades, repo_codes: set[str]) -> dict[str, dict[str, float]]:
+    """Compute close value by date and code from normalized trades."""
+    if trades.empty:
+        return {}
+
+    securities = trades[~trades["code"].isin(repo_codes)].copy()
+    securities["date"] = securities["datetime"].str.split(" ").str[0]
+    dates = sorted(set(securities["date"]))
+    result = {date: {} for date in dates}
+
+    for code, code_trades in securities.groupby("code"):
+        shares = 0
+        daily_shares = {}
+        for trade in code_trades.sort_values("datetime").itertuples(index=False):
+            shares += trade.quantity if trade.side == "买入" else -trade.quantity
+            daily_shares[trade.date] = shares
+
+        try:
+            closes = get_daily_closes(code)
+        except requests.RequestException:
+            closes = {}
+
+        shares = 0
+        for date in dates:
+            shares = daily_shares.get(date, shares)
+            result[date][code] = round(shares * closes.get(date, 0), 2)
+
+    return result

@@ -31,6 +31,7 @@
     <div class="sub-tabs">
       <div class="sub-tab" :class="{ active: subTab === 'table' }" @click="subTab = 'table'">持仓明细</div>
       <div class="sub-tab" :class="{ active: subTab === 'pie' }" @click="subTab = 'pie'">持仓占比</div>
+      <div class="sub-tab" :class="{ active: subTab === 'plan' }" @click="subTab = 'plan'">定投计划</div>
     </div>
     <n-data-table
       v-show="subTab === 'table'"
@@ -48,6 +49,7 @@
       </div>
       <v-chart :option="pieOption" autoresize style="height: calc(100% - 30px); min-height: 270px" />
     </div>
+    <InvestmentPlan v-show="subTab === 'plan'" :holdings="props.holdings" @plans-change="updatePlanCodes" />
   </div>
 </template>
 
@@ -59,6 +61,7 @@ import { use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { PieChart } from "echarts/charts";
 import { LegendComponent, TooltipComponent } from "echarts/components";
+import InvestmentPlan from "./InvestmentPlan.vue";
 import {
   formatMoney,
   displayData,
@@ -70,6 +73,11 @@ import {
 use([CanvasRenderer, PieChart, LegendComponent, TooltipComponent]);
 
 const hideAmount = persistedRef("holdings_hideAmount", false);
+const investmentPlanCodes = ref(new Set());
+
+function updatePlanCodes(codes) {
+  investmentPlanCodes.value = new Set(codes);
+}
 const subTab = persistedRef("holdings_subTab", "table");
 const pieMetric = persistedRef("holdings_pieMetric", "marketValue");
 const pieMetricOptions = [
@@ -239,7 +247,12 @@ const holdingColumns = [
     render: (row) =>
       row.cleared
         ? h("span", { class: "tag-cleared" }, "已清仓")
-        : h("span", { class: "tag-holding" }, "持有"),
+        : h("span", { class: "status-tags" }, [
+            h("span", { class: "tag-holding" }, "持有"),
+            investmentPlanCodes.value.has(row.code)
+              ? h("span", { class: "tag-plan" }, "定投")
+              : null,
+          ]),
   },
 ];
 

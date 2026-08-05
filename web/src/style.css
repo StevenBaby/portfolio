@@ -280,6 +280,96 @@ body {
   margin-left: auto;
 }
 
+.investment-plan {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 4px 0;
+}
+
+.plan-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 0 14px;
+  border-bottom: 1px solid #2a2a2e;
+}
+
+.plan-date {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #3a3a40;
+  border-radius: 4px;
+  background: #1a1a1e;
+  color: #ddd;
+  color-scheme: dark;
+}
+
+.plan-list {
+  margin-top: 8px;
+}
+
+.plan-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(100px, 1fr) 80px 120px 70px 100px;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 10px;
+  border-bottom: 1px solid #25252a;
+  color: #ddd;
+  font-size: 13px;
+}
+
+.plan-header {
+  min-height: 32px;
+  color: #888;
+  font-size: 12px;
+}
+
+.plan-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.plan-actions button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+}
+
+.plan-actions button:hover {
+  color: #d03050;
+}
+
+.plan-error {
+  padding: 8px 0;
+  color: #e88090;
+  font-size: 13px;
+}
+
+.empty-state {
+  padding: 40px 0;
+  color: #777;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .plan-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+    padding: 8px 4px;
+  }
+  .plan-header {
+    display: none;
+  }
+}
+
 .amount-positive {
   color: #d03050;
 }
@@ -301,4 +391,19 @@ body {
   background: #1a2a1e;
   padding: 2px 6px;
   border-radius: 3px;
+}
+
+.tag-plan {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: #f0a020;
+  background: #332719;
+  font-size: 12px;
+}
+
+.status-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }

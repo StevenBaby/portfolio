@@ -48,7 +48,7 @@ run:
 		--name $(CONTAINER_NAME) \
 		--restart unless-stopped \
 		-p 127.0.0.1:$(HOST_PORT):80 \
-		-v $$(pwd)/trade:/app/trade:ro \
+		-v $$(pwd)/trade:/app/trade \
 		$(FULL_IMAGE_NAME)
 
 restart: run

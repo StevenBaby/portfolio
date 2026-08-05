@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
-from api.amarket import _parse_quote_line
+import pandas as pd
+
+from api.amarket import _parse_quote_line, compute_daily_market_value
 
 
 class ParseQuoteLineTests(unittest.TestCase):
@@ -23,6 +26,30 @@ class ParseQuoteLineTests(unittest.TestCase):
         self.assertEqual(quote["price"], 1.223)
         self.assertEqual(quote["status"], "00")
         self.assertNotIn("extra", quote)
+
+
+class DailyMarketValueTests(unittest.TestCase):
+    @patch("api.amarket.get_daily_closes")
+    def test_accumulates_positions_and_excludes_repos(self, closes) -> None:
+        closes.return_value = {"20260801": 4.5, "20260802": 4.6}
+        trades = pd.DataFrame(
+            [
+                {"datetime": "20260801 09:30:00", "code": "510300", "side": "买入", "quantity": 100},
+                {"datetime": "20260802 09:30:00", "code": "510300", "side": "卖出", "quantity": 40},
+                {"datetime": "20260801 15:00:00", "code": "204001", "side": "买入", "quantity": 1000},
+            ]
+        )
+
+        result = compute_daily_market_value(trades, {"204001"})
+
+        self.assertEqual(
+            result,
+            {
+                "20260801": {"510300": 450.0},
+                "20260802": {"510300": 276.0},
+            },
+        )
+        closes.assert_called_once_with("510300")
 
 
 if __name__ == "__main__":

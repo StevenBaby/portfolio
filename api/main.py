@@ -2,24 +2,24 @@
 
 from __future__ import annotations
 
-import json
 from typing import Annotated
-import urllib.request
 
 import pandas as pd
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.amarket import get_quotes
+from api.amarket import compute_daily_market_value, get_quotes
 from api.galaxy import REPO_CODES, compute_holdings, load_trades
+from api.plan import router as plan_router
 
 app = FastAPI(title="Galaxy Portfolio API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5174", "http://127.0.0.1:5174"],
-    allow_methods=["GET"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(plan_router)
 
 
 def _records(df: pd.DataFrame) -> list[dict]:
@@ -53,51 +53,6 @@ def quotes(
     return get_quotes(parsed)
 
 
-def _daily_closes(code: str) -> dict[str, float]:
-    market = "sh" if code[0] in "569" else "sz"
-    url = (
-        "https://quotes.sina.cn/cn/api/json_v2.php/"
-        "CN_MarketDataService.getKLineData"
-        f"?symbol={market}{code}&scale=240&datalen=200"
-    )
-    request = urllib.request.Request(
-        url,
-        headers={"Referer": "https://finance.sina.com.cn"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=15) as response:
-            klines = json.loads(response.read().decode("utf-8"))
-    except Exception:
-        return {}
-    return {
-        item["day"][:10].replace("-", ""): float(item["close"])
-        for item in klines or []
-    }
-
-
 @app.get("/api/daily_market_value")
 def daily_market_value() -> dict[str, dict[str, float]]:
-    """Return daily close value for each non-repo position."""
-    trades_df = load_trades()
-    if trades_df.empty:
-        return {}
-
-    etfs = trades_df[~trades_df["code"].isin(REPO_CODES)].copy()
-    etfs["date"] = etfs["datetime"].str.split(" ").str[0]
-    dates = sorted(set(etfs["date"]))
-    result = {date: {} for date in dates}
-
-    for code, trades in etfs.groupby("code"):
-        daily_shares = {}
-        shares = 0
-        for trade in trades.sort_values("datetime").itertuples(index=False):
-            shares += trade.quantity if trade.side == "买入" else -trade.quantity
-            daily_shares[trade.date] = shares
-
-        closes = _daily_closes(code)
-        shares = 0
-        for date in dates:
-            shares = daily_shares.get(date, shares)
-            result[date][code] = round(shares * closes.get(date, 0), 2)
-
-    return result
+    return compute_daily_market_value(load_trades(), REPO_CODES)
