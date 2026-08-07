@@ -88,6 +88,13 @@
       </div>
       <div
         class="sub-tab"
+        :class="{ active: subTab === 'summary' }"
+        @click="subTab = 'summary'"
+      >
+        交易汇总
+      </div>
+      <div
+        class="sub-tab"
         :class="{ active: subTab === 'chart' }"
         @click="subTab = 'chart'"
       >
@@ -110,6 +117,18 @@
       :striped="true"
       size="small"
       :row-key="rowKey"
+      flex-height
+      style="flex: 1"
+    />
+    <n-data-table
+      v-show="subTab === 'summary'"
+      :columns="summaryColumns"
+      :data="tradeSummary"
+      :pagination="summaryPagination"
+      :bordered="false"
+      :striped="true"
+      size="small"
+      :row-key="(row) => row.code"
       flex-height
       style="flex: 1"
     />
@@ -238,6 +257,10 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
+  holdings: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const selectedCode = persistedRef("trades_selectedCode", null);
@@ -246,6 +269,57 @@ const searchText = persistedRef("trades_searchText", "");
 const dateRange = ref(null);
 const dateSingle = ref(null);
 const isDateRange = persistedRef("trades_isDateRange", false);
+const dailyCloseValues = ref({});
+const dailyClosePrices = ref({});
+
+async function loadDailyCloseValues() {
+  try {
+    const [marketValueResponse, closePriceResponse] = await Promise.all([
+      fetch(`${API}/api/daily_market_value`),
+      fetch(`${API}/api/daily_close_prices`),
+    ]);
+    dailyCloseValues.value = await marketValueResponse.json();
+    dailyClosePrices.value = await closePriceResponse.json();
+  } catch (error) {
+    console.error("加载收盘数据失败:", error);
+  }
+}
+
+const selectedSummaryDate = computed(() => (
+  (isDateRange.value && dateRange.value?.[1]) ||
+  (!isDateRange.value && dateSingle.value)
+    ? formatTs(isDateRange.value ? dateRange.value[1] : dateSingle.value)
+    : ""
+));
+const summaryPriceDate = computed(() => {
+  const selectedEnd = selectedSummaryDate.value;
+  const dates = Object.keys(dailyClosePrices.value).sort();
+  if (!dates.length) return "";
+  return selectedEnd ? dates.filter((date) => date <= selectedEnd).at(-1) || dates[0] : dates.at(-1);
+});
+const todayDate = (() => {
+  const now = new Date();
+  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+})();
+const isMarketOpenDate = computed(() => summaryPriceDate.value === todayDate);
+const sharesAtDate = computed(() => {
+  const cutoff = summaryPriceDate.value;
+  const shares = {};
+  for (const trade of props.trades) {
+    if (isReverseRepo(trade.code) || (cutoff && trade.datetime.split(" ")[0] > cutoff)) continue;
+    shares[trade.code] = (shares[trade.code] || 0) + (trade.side === "买入" ? trade.quantity : -trade.quantity);
+  }
+  return shares;
+});
+
+function getSummaryPrice(code) {
+  const latestTrade = props.trades.find((trade) => trade.code === code);
+  if (!selectedSummaryDate.value) return props.quotes[code]?.price || latestTrade?.price || 0;
+  if (isMarketOpenDate.value) return props.quotes[code]?.price || latestTrade?.price || 0;
+  const value = dailyClosePrices.value[summaryPriceDate.value]?.[code] || 0;
+  if (value > 0) return value;
+  return latestTrade?.price || 0;
+}
 
 const datePickerValue = computed({
   get: () => (isDateRange.value ? dateRange.value : dateSingle.value),
@@ -253,6 +327,10 @@ const datePickerValue = computed({
     if (isDateRange.value) dateRange.value = val;
     else dateSingle.value = val;
   },
+});
+
+onMounted(() => {
+  loadDailyCloseValues();
 });
 
 // ============ 分页 ============
@@ -268,6 +346,19 @@ const pagination = reactive({
   onUpdatePageSize: (size) => {
     pagination.pageSize = size;
     pagination.page = 1;
+  },
+});
+
+const summaryPagination = reactive({
+  page: 1,
+  pageSize: 50,
+  showSizePicker: true,
+  pageSizes: [20, 50, 100],
+  showQuickJumper: true,
+  onChange: (page) => { summaryPagination.page = page; },
+  onUpdatePageSize: (size) => {
+    summaryPagination.pageSize = size;
+    summaryPagination.page = 1;
   },
 });
 
@@ -337,6 +428,106 @@ const filteredTrades = computed(() => {
     return true;
   });
 });
+
+// ============ 交易汇总 ============
+function summaryCodeSort(a, b) {
+  if (a.cleared !== b.cleared) return Number(a.cleared) - Number(b.cleared);
+  return a.code.localeCompare(b.code);
+}
+
+const summaryTrades = computed(() => {
+  let endDate = "";
+  if (isDateRange.value && dateRange.value?.[1]) {
+    endDate = formatTs(dateRange.value[1]);
+  } else if (!isDateRange.value && dateSingle.value) {
+    endDate = formatTs(dateSingle.value);
+  }
+
+  return props.trades.filter((trade) => {
+    if (selectedCode.value && trade.code !== selectedCode.value) return false;
+    if (selectedSide.value) {
+      if (selectedSide.value === "reverse_repo" && !isReverseRepo(trade.code)) return false;
+      if (selectedSide.value === "buy" && trade.side !== "买入") return false;
+      if (selectedSide.value === "sell" && trade.side !== "卖出") return false;
+    }
+    if (searchText.value) {
+      const query = searchText.value.toLowerCase();
+      if (!trade.code.includes(query) && !trade.name.toLowerCase().includes(query)) return false;
+    }
+    if (endDate && trade.datetime.split(" ")[0] > endDate) return false;
+    return true;
+  });
+});
+
+const tradeSummary = computed(() => {
+  const groups = new Map();
+  for (const trade of summaryTrades.value) {
+    if (isReverseRepo(trade.code)) continue;
+    if (!groups.has(trade.code)) {
+      groups.set(trade.code, {
+        code: trade.code,
+        name: trade.name,
+        shares: 0,
+        total_cost: 0,
+        buy_count: 0,
+        sell_count: 0,
+      });
+    }
+    const group = groups.get(trade.code);
+    const quantity = trade.quantity || 0;
+    const amount = trade.amount || 0;
+    const fee = trade.fee || 0;
+    if (trade.side === "买入") {
+      group.shares += quantity;
+      group.total_cost += amount + fee;
+      group.buy_count += 1;
+    } else {
+      group.shares -= quantity;
+      group.total_cost -= amount - fee;
+      group.sell_count += 1;
+    }
+  }
+  return [...groups.values()]
+    .map((group) => {
+      const price = getSummaryPrice(group.code);
+      const avgCost = group.shares > 0 ? group.total_cost / group.shares : 0;
+      const marketValue = price * group.shares;
+      const floatPnl = group.shares > 0 ? marketValue - group.total_cost : -group.total_cost;
+      const pnlPct = group.total_cost > 0 ? (floatPnl / group.total_cost) * 100 : 0;
+      return {
+        ...group,
+        avg_cost: avgCost,
+        price,
+        marketValue,
+        floatPnl,
+        pnlPct,
+        cleared: group.shares === 0,
+      };
+    })
+    .sort(summaryCodeSort);
+});
+
+const summaryColumns = [
+  { title: "代码", key: "code", width: 80, render: (row) => displayData(row.code, hideAmount.value, null, "***") },
+  { title: "名称", key: "name", width: 110, render: (row) => {
+    const name = holdingProfiles.value[row.code]?.name || row.name;
+    const color = holdingProfiles.value[row.code]?.color || "#d03050";
+    if (hideAmount.value) return "***";
+    return h("div", { class: "holding-name-cell" }, [
+      h("span", { title: row.name }, name),
+      h("span", { class: "holding-name-color", style: { backgroundColor: color }, title: color }),
+    ]);
+  } },
+  { title: "持仓", key: "shares", width: 90, render: (row) => displayData(row.shares > 0 ? row.shares : null, hideAmount.value, (v) => v.toLocaleString(), "***") },
+  { title: "平均成本", key: "avg_cost", width: 95, render: (row) => displayData(row.shares > 0 ? row.avg_cost : null, hideAmount.value, (v) => v.toFixed(4), "***") },
+  { title: "当日价", key: "price", width: 80, render: (row) => displayData(row.price || null, hideAmount.value, (v) => v.toFixed(3), "***") },
+  { title: "总成本", key: "total_cost", width: 110, render: (row) => displayData(row.total_cost, hideAmount.value, (v) => `¥${v.toFixed(2)}`, "***") },
+  { title: "市值", key: "marketValue", width: 110, render: (row) => displayData(row.price && row.shares > 0 ? row.marketValue : null, hideAmount.value, (v) => `¥${v.toFixed(2)}`, "***") },
+  { title: "浮动盈亏", key: "floatPnl", width: 110, render: (row) => pnlRender(row.floatPnl) },
+  { title: "收益率", key: "pnlPct", width: 85, render: (row) => row.price && row.shares > 0 ? pctRender(row.pnlPct) : hideAmount.value ? "***" : "--" },
+  { title: "买卖", key: "trades", width: 65, render: (row) => `${row.buy_count}/${row.sell_count}` },
+  { title: "状态", key: "status", width: 70, render: (row) => row.cleared ? h("span", { class: "tag-cleared" }, "已清仓") : h("span", { class: "tag-holding" }, "持有") },
+];
 
 // ============ 直方图 ============
 const chartOption = computed(() => {
@@ -680,10 +871,15 @@ const columns = [
     title: "名称",
     key: "name",
     width: 100,
-    render: (row) =>
-      displayData(row.name, hideAmount.value, (v) =>
-        h("span", { title: row.fullname }, v)
-      ),
+    render: (row) => {
+      if (hideAmount.value) return "***";
+      const name = holdingProfiles.value[row.code]?.name || row.name;
+      const color = holdingProfiles.value[row.code]?.color || "#d03050";
+      return h("div", { class: "holding-name-cell" }, [
+        h("span", { title: row.fullname }, name),
+        h("span", { class: "holding-name-color", style: { backgroundColor: color }, title: color }),
+      ]);
+    },
   },
   {
     title: "方向",

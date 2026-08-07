@@ -8,7 +8,7 @@ import pandas as pd
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.amarket import compute_daily_market_value, get_quotes
+from api.amarket import compute_daily_close_prices, compute_daily_market_value, get_quotes
 from api.galaxy import REPO_CODES, compute_holdings, load_trades
 from api.plan import router as plan_router
 
@@ -51,6 +51,12 @@ def quotes(
 ) -> list[dict]:
     parsed = [code.strip() for code in codes.split(",") if code.strip()]
     return get_quotes(parsed)
+
+
+@app.get("/api/daily_close_prices")
+def daily_close_prices() -> dict[str, dict[str, float]]:
+    codes = [trade["code"] for trade in _records(load_trades()) if trade["code"] not in REPO_CODES]
+    return compute_daily_close_prices(sorted(set(codes)))
 
 
 @app.get("/api/daily_market_value")

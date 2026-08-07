@@ -393,6 +393,21 @@ body {
   border-radius: 3px;
 }
 
+.holding-name-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  line-height: 1.2;
+}
+
+.holding-name-color {
+  display: block;
+  width: 42px;
+  height: 3px;
+  border-radius: 2px;
+}
+
 .holding-profile-input {
   width: 100%;
   min-width: 0;

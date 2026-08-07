@@ -96,6 +96,11 @@ const props = defineProps({
 
 const showCleared = persistedRef("holdings_showCleared", false);
 
+function holdingCodeSort(a, b) {
+  if (a.cleared !== b.cleared) return Number(a.cleared) - Number(b.cleared);
+  return a.code.localeCompare(b.code);
+}
+
 const allHoldings = computed(() => {
   return props.holdings
     .map((h) => {
@@ -107,7 +112,7 @@ const allHoldings = computed(() => {
       const cleared = h.shares === 0;
       return { ...h, price, marketValue, floatPnl, pnlPct, cleared };
     })
-    .sort((a, b) => b.total_cost - a.total_cost);
+    .sort(holdingCodeSort);
 });
 
 const filteredHoldings = computed(() => {
@@ -217,7 +222,7 @@ function updateHoldingProfile(row, field, value) {
   };
 }
 
-const holdingColumns = [
+const holdingColumns = computed(() => [
   {
     title: "代码",
     key: "code",
@@ -232,27 +237,36 @@ const holdingColumns = [
       const customName = holdingProfiles.value[row.code]?.name || "";
       const displayName = customName || row.name;
       if (hideAmount.value) return "***";
-      if (!editHoldingInfo.value) {
-        return h("span", { title: row.fullname }, displayName);
-      }
-      return h("input", {
-        class: "holding-profile-input",
-        value: customName,
-        placeholder: row.name,
-        onInput: (event) => updateHoldingProfile(row, "name", event.target.value),
+      const color = holdingProfiles.value[row.code]?.color || "#d03050";
+      const colorSwatch = h("span", {
+        class: "holding-name-color",
+        style: { backgroundColor: color },
+        title: color,
       });
+      if (!editHoldingInfo.value) {
+        return h("div", { class: "holding-name-cell" }, [
+          h("span", { title: row.fullname }, displayName),
+          colorSwatch,
+        ]);
+      }
+      return h("div", { class: "holding-name-cell" }, [
+        h("input", {
+          class: "holding-profile-input",
+          value: customName,
+          placeholder: row.name,
+          onInput: (event) => updateHoldingProfile(row, "name", event.target.value),
+        }),
+        colorSwatch,
+      ]);
     },
   },
-  {
+  ...(editHoldingInfo.value ? [{
     title: "颜色",
     key: "color",
     width: 90,
     render: (row) => {
       const color = holdingProfiles.value[row.code]?.color || "#d03050";
       if (hideAmount.value) return "***";
-      if (!editHoldingInfo.value) {
-        return h("span", { class: "holding-color-swatch", style: { backgroundColor: color }, title: color });
-      }
       return h(NColorPicker, {
         value: color,
         swatches: presetColors,
@@ -263,7 +277,7 @@ const holdingColumns = [
         "onUpdate:value": (value) => setHoldingColor(row, value),
       });
     },
-  },
+  }] : []),
   {
     title: "持仓",
     key: "shares",
@@ -360,7 +374,7 @@ const holdingColumns = [
               : null,
           ]),
   },
-];
+]);
 
 // ============ 饼图 ============
 const pieData = computed(() => {

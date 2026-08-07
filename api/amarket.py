@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
+import urllib.parse
+import urllib.request
+
 import requests
 
 SINA_FIELDS = (
@@ -99,20 +104,31 @@ def get_quotes(codes: list[str]) -> list[dict]:
 
 
 def get_daily_closes(code: str) -> dict[str, float]:
-    """Fetch up to 200 daily closing prices from Sina."""
+    """Fetch the latest daily closing prices from Tencent."""
     market = "sh" if code[0] in "569" else "sz"
+    symbol = f"{market}{code}"
     response = requests.get(
-        "https://quotes.sina.cn/cn/api/json_v2.php/"
-        "CN_MarketDataService.getKLineData",
-        params={"symbol": f"{market}{code}", "scale": 240, "datalen": 200},
-        headers={"Referer": "https://finance.sina.com.cn"},
+        "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get",
+        params={"param": f"{symbol},day,,,320,qfq"},
+        headers={"Referer": "https://gu.qq.com", "User-Agent": "Mozilla/5.0"},
         timeout=15,
     )
     response.raise_for_status()
-    return {
-        item["day"][:10].replace("-", ""): float(item["close"])
-        for item in response.json() or []
-    }
+    data = (response.json().get("data") or {}).get(symbol) or {}
+    rows = data.get("qfqday") or data.get("day") or []
+    return {row[0].replace("-", ""): float(row[2]) for row in rows}
+
+
+def compute_daily_close_prices(codes: list[str]) -> dict[str, dict[str, float]]:
+    """Fetch daily close prices keyed by date and security code."""
+    by_date: dict[str, dict[str, float]] = {}
+    for code in codes:
+        try:
+            for date, close in get_daily_closes(code).items():
+                by_date.setdefault(date, {})[code] = close
+        except requests.RequestException:
+            continue
+    return by_date
 
 
 def compute_daily_market_value(trades, repo_codes: set[str]) -> dict[str, dict[str, float]]:

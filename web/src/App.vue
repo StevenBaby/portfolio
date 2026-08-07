@@ -26,6 +26,7 @@
             ref="tradesRef"
             :trades="trades"
             :quotes="quotes"
+            :holdings="holdings"
           />
           <HoldingsPage
             v-else-if="tab === 'holdings'"

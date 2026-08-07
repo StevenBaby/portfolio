@@ -37,6 +37,8 @@ import {
   NSwitch,
 } from "naive-ui";
 
+import { holdingProfiles } from "../parse.js";
+
 const props = defineProps({ holdings: { type: Array, default: () => [] } });
 const emit = defineEmits(["plans-change"]);
 const API = import.meta.env.DEV ? "http://localhost:8090" : "";
@@ -99,7 +101,15 @@ async function removePlan(code) {
 }
 const columns = [
   { title: "代码", key: "code", width: 80 },
-  { title: "名称", key: "name", minWidth: 120 },
+  { title: "名称", key: "name", minWidth: 120, render: (row) => {
+    const holding = props.holdings.find((item) => item.code === row.code);
+    const name = holdingProfiles.value[row.code]?.name || row.name;
+    const color = holdingProfiles.value[row.code]?.color || "#d03050";
+    return h("div", { class: "holding-name-cell" }, [
+      h("span", name),
+      h("span", { class: "holding-name-color", style: { backgroundColor: color }, title: color }),
+    ]);
+  } },
   { title: "定投金额", key: "amount", width: 110, render: (row) => `¥${Number(row.amount).toFixed(2)}` },
   { title: "周期", key: "frequency", width: 75 },
   { title: "下次定投", key: "next_date", width: 120 },
