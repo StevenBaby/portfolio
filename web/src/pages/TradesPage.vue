@@ -186,6 +186,7 @@ import {
   aggregateByDate,
   persistedRef,
   isReverseRepo,
+  holdingProfiles,
 } from "../parse.js";
 
 use([
@@ -211,19 +212,19 @@ const metricOptions = [
 ];
 
 function selectAllLegend() {
-  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value, props.trades, dailyMv.value);
+  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value, props.trades, dailyMv.value, holdingProfiles.value);
   const sel = {};
   series.forEach((s) => {
-    sel[s.name] = true;
+    sel[s.code] = true;
   });
   legendSelected.value = sel;
 }
 
 function clearAllLegend() {
-  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value, props.trades, dailyMv.value);
+  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value, props.trades, dailyMv.value, holdingProfiles.value);
   const sel = {};
   series.forEach((s) => {
-    sel[s.name] = false;
+    sel[s.code] = false;
   });
   legendSelected.value = sel;
 }
@@ -343,21 +344,23 @@ const chartOption = computed(() => {
     filteredTrades.value,
     chartMetric.value,
     props.trades,
-    dailyMv.value
+    dailyMv.value,
+    holdingProfiles.value
   );
   const filteredSeries = series.filter((s) => s.data.some((v) => v !== 0));
   return {
     tooltip: {
       trigger: "axis",
       formatter: (params) => {
-        const date = params[0].axisValue;
-        const lines = params.filter((p) => p.value && p.value !== 0);
+        if (!params?.length) return "";
+        const date = params[0]?.axisValue || "";
+        const lines = params.filter((p) => p && p.value !== 0 && p.value != null);
         if (!lines.length) return "";
         return [
           date,
           ...lines.map(
             (p) =>
-              `${p.marker}${hideAmount.value ? "***" : p.seriesName}: ${
+              `${p.marker}${hideAmount.value ? "***" : (filteredSeries.find((s) => s.code === p.seriesName)?.name || p.seriesName)}: ${
                 chartMetric.value === "quantity"
                   ? Math.round(p.value)
                   : p.value.toFixed(2)
@@ -370,11 +373,9 @@ const chartOption = computed(() => {
       type: "scroll",
       bottom: 0,
       textStyle: { color: "#aaa", fontSize: 11 },
-      data: filteredSeries.map((s, i) =>
-        hideAmount.value ? `***${i}` : s.name
-      ),
+      data: filteredSeries.map((s) => s.code),
       selected: legendSelected.value,
-      formatter: (name) => (hideAmount.value ? "***" : name),
+      formatter: (code) => hideAmount.value ? "***" : (filteredSeries.find((s) => s.code === code)?.name || code),
     },
     grid: { top: 10, left: 50, right: 20, bottom: 60 },
     xAxis: {
@@ -391,9 +392,10 @@ const chartOption = computed(() => {
       splitLine: { lineStyle: { color: "#222" } },
     },
     series: filteredSeries.map((s, i) => ({
-      name: hideAmount.value ? `***${i}` : s.name,
+      name: s.code,
       type: "bar",
       stack: "amount",
+      itemStyle: s.color ? { color: s.color } : undefined,
       data: s.data,
     })),
   };
@@ -443,14 +445,17 @@ const lineChartOption = computed(() => {
     filteredTrades.value,
     chartMetric.value,
     props.trades,
-    dailyMv.value
+    dailyMv.value,
+    holdingProfiles.value
   );
 
   let cumSeries;
   if (chartMetric.value === "amount") {
     // 金额模式: 每日收盘市值 = 累计持仓 × 当日收盘价
     cumSeries = series.map((s) => ({
+      code: s.code,
       name: s.name,
+      color: s.color,
       data: dates.map((d) => {
         const formatted = d.replace(/-/g, "");
         return dailyMv.value[formatted]?.[s.code] || 0;
@@ -464,7 +469,9 @@ const lineChartOption = computed(() => {
     cumSeries = series.map((s) => {
       let cum = 0;
       return {
+        code: s.code,
         name: s.name,
+        color: s.color,
         data: s.data.map((v) => {
           cum += v;
           return cum;
@@ -477,14 +484,15 @@ const lineChartOption = computed(() => {
     tooltip: {
       trigger: "axis",
       formatter: (params) => {
-        const date = params[0].axisValue;
-        const lines = params.filter((p) => p.value && p.value !== 0);
+        if (!params?.length) return "";
+        const date = params[0]?.axisValue || "";
+        const lines = params.filter((p) => p && p.value !== 0 && p.value != null);
         if (!lines.length) return "";
         return [
           date,
           ...lines.map(
             (p) =>
-              `${p.marker}${hideAmount.value ? "***" : p.seriesName}: ${
+              `${p.marker}${hideAmount.value ? "***" : (filteredSeries.find((s) => s.code === p.seriesName)?.name || p.seriesName)}: ${
                 chartMetric.value === "quantity"
                   ? Math.round(p.value)
                   : p.value.toFixed(2)
@@ -497,11 +505,9 @@ const lineChartOption = computed(() => {
       type: "scroll",
       bottom: 0,
       textStyle: { color: "#aaa", fontSize: 11 },
-      data: filteredSeries.map((s, i) =>
-        hideAmount.value ? `***${i}` : s.name
-      ),
+      data: filteredSeries.map((s) => s.code),
       selected: legendSelected.value,
-      formatter: (name) => (hideAmount.value ? "***" : name),
+      formatter: (code) => hideAmount.value ? "***" : (filteredSeries.find((s) => s.code === code)?.name || code),
     },
     grid: { top: 10, left: 50, right: 20, bottom: 60 },
     xAxis: {
@@ -518,9 +524,11 @@ const lineChartOption = computed(() => {
       splitLine: { lineStyle: { color: "#222" } },
     },
     series: filteredSeries.map((s, i) => ({
-      name: hideAmount.value ? `***${i}` : s.name,
+      name: s.code,
       type: "line",
       smooth: true,
+      lineStyle: s.color ? { color: s.color } : undefined,
+      itemStyle: s.color ? { color: s.color } : undefined,
       data: s.data,
       symbol: "circle",
       symbolSize: 5,

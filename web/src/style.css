@@ -393,6 +393,67 @@ body {
   border-radius: 3px;
 }
 
+.holding-profile-input {
+  width: 100%;
+  min-width: 0;
+  padding: 3px 5px;
+  border: 1px solid #3a3a40;
+  border-radius: 3px;
+  background: #1a1a1e;
+  color: #ddd;
+  font-size: 12px;
+}
+
+.holding-profile-input:focus {
+  border-color: #666;
+  outline: none;
+}
+
+.holding-color-swatch {
+  display: inline-block;
+  width: 24px;
+  height: 18px;
+  border: 1px solid #555;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+.holding-color-editor {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.holding-preset-colors {
+  display: grid;
+  grid-template-columns: repeat(4, 18px);
+  gap: 3px;
+}
+
+.holding-preset-color {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #555;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.holding-preset-color.active {
+  border-color: #fff;
+  box-shadow: 0 0 0 1px #fff;
+}
+
+.holding-color-input {
+  width: 30px;
+  height: 22px;
+  padding: 1px;
+  border: 1px solid #3a3a40;
+  border-radius: 3px;
+  background: #1a1a1e;
+  cursor: pointer;
+}
+
 .tag-plan {
   display: inline-block;
   padding: 2px 6px;

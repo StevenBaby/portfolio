@@ -42,6 +42,14 @@ export function persistedRef(key, defaultValue) {
   return r;
 }
 
+const storedHoldingProfiles = localStorage.getItem("holding_profiles");
+export const holdingProfiles = ref(
+  storedHoldingProfiles ? JSON.parse(storedHoldingProfiles) : {}
+);
+watch(holdingProfiles, (value) => {
+  localStorage.setItem("holding_profiles", JSON.stringify(value));
+}, { deep: true });
+
 /**
  * 盈亏渲染：带正负号 + 红绿色 + 隐藏支持
  * 返回 { text, cls } 供调用方决定如何渲染
@@ -96,7 +104,7 @@ export function getTradeType(record) {
  * 按日期+品种聚合交易金额，用于直方图
  * 返回 { dates: [...], series: [{ name, data: [...] }] }
  */
-export function aggregateByDate(trades, metric = "amount", calculationTrades = trades, dailyMarketValue = {}) {
+export function aggregateByDate(trades, metric = "amount", calculationTrades = trades, dailyMarketValue = {}, profiles = {}) {
   const byCode = {};
   const costByCode = {};
   const snapshots = {};
@@ -110,7 +118,7 @@ export function aggregateByDate(trades, metric = "amount", calculationTrades = t
   for (const t of orderedTrades) {
     if (isReverseRepo(t.code)) continue;
     const date = t.datetime.split(" ")[0];
-    if (!byCode[t.code]) byCode[t.code] = { name: t.name, data: {} };
+    if (!byCode[t.code]) byCode[t.code] = { name: profiles[t.code]?.name || t.name, color: profiles[t.code]?.color, data: {} };
     if (!costByCode[t.code]) costByCode[t.code] = { shares: 0, cost: 0, realized: 0 };
     if (isPnlMetric) {
       cashFlowByCode[t.code] ||= {};
@@ -175,6 +183,7 @@ export function aggregateByDate(trades, metric = "amount", calculationTrades = t
   const series = Object.entries(byCode).map(([code, info]) => ({
     code,
     name: info.name,
+    color: info.color,
     data: dates.map((d) => info.data[d] || 0),
   }));
   return { dates: dates.map(formatDate), series };

@@ -27,6 +27,7 @@
     <div class="filter-bar">
       <n-checkbox v-model:checked="showCleared" class="ml-auto">显示已清仓</n-checkbox>
       <n-checkbox v-model:checked="hideAmount">隐藏信息</n-checkbox>
+      <n-checkbox v-model:checked="editHoldingInfo">编辑信息</n-checkbox>
     </div>
     <div class="sub-tabs">
       <div class="sub-tab" :class="{ active: subTab === 'table' }" @click="subTab = 'table'">持仓明细</div>
@@ -54,8 +55,8 @@
 </template>
 
 <script setup>
-import { ref, computed, h } from "vue";
-import { NDataTable, NTag, NCheckbox, NSelect } from "naive-ui";
+import { ref, computed, h, watch } from "vue";
+import { NDataTable, NTag, NCheckbox, NSelect, NColorPicker } from "naive-ui";
 import VChart from "vue-echarts";
 import { use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
@@ -68,11 +69,13 @@ import {
   pnlFormat,
   pctFormat,
   persistedRef,
+  holdingProfiles,
 } from "../parse.js";
 
 use([CanvasRenderer, PieChart, LegendComponent, TooltipComponent]);
 
 const hideAmount = persistedRef("holdings_hideAmount", false);
+const editHoldingInfo = persistedRef("holdings_editInfo", false);
 const investmentPlanCodes = ref(new Set());
 
 function updatePlanCodes(codes) {
@@ -142,6 +145,78 @@ function pctRender(val) {
   return h("span", { class: cls }, text);
 }
 
+const presetColors = [
+  "#d03050",
+  "#18a058",
+  "#2080f0",
+  "#f0a020",
+  "#8a2be2",
+  "#00a6a6",
+  "#e06c9f",
+  "#7c9a2e",
+];
+
+function setHoldingColor(row, color) {
+  updateHoldingProfile(row, "color", color);
+}
+
+function randomHoldingColor() {
+  const hue = Math.floor(Math.random() * 360);
+  const saturation = 0.68;
+  const lightness = 0.58;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const segment = hue / 60;
+  const second = chroma * (1 - Math.abs((segment % 2) - 1));
+  const [red, green, blue] = segment < 1
+    ? [chroma, second, 0]
+    : segment < 2
+    ? [second, chroma, 0]
+    : segment < 3
+    ? [0, chroma, second]
+    : segment < 4
+    ? [0, second, chroma]
+    : segment < 5
+    ? [second, 0, chroma]
+    : [chroma, 0, second];
+  const match = lightness - chroma / 2;
+  return `#${[red, green, blue]
+    .map((value) => Math.round((value + match) * 255).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+function isValidHoldingColor(color) {
+  return typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color);
+}
+
+watch(
+  () => props.holdings,
+  (holdings) => {
+    const next = { ...holdingProfiles.value };
+    let changed = false;
+    holdings.forEach((holding) => {
+      if (!isValidHoldingColor(next[holding.code]?.color)) {
+        next[holding.code] = {
+          ...(next[holding.code] || {}),
+          color: randomHoldingColor(),
+        };
+        changed = true;
+      }
+    });
+    if (changed) holdingProfiles.value = next;
+  },
+  { immediate: true }
+);
+
+function updateHoldingProfile(row, field, value) {
+  holdingProfiles.value = {
+    ...holdingProfiles.value,
+    [row.code]: {
+      ...(holdingProfiles.value[row.code] || {}),
+      [field]: value,
+    },
+  };
+}
+
 const holdingColumns = [
   {
     title: "代码",
@@ -152,11 +227,42 @@ const holdingColumns = [
   {
     title: "名称",
     key: "name",
-    width: 100,
-    render: (row) =>
-      displayData(row.name, hideAmount.value, (v) =>
-        h("span", { title: row.fullname }, v)
-      ),
+    width: 120,
+    render: (row) => {
+      const customName = holdingProfiles.value[row.code]?.name || "";
+      const displayName = customName || row.name;
+      if (hideAmount.value) return "***";
+      if (!editHoldingInfo.value) {
+        return h("span", { title: row.fullname }, displayName);
+      }
+      return h("input", {
+        class: "holding-profile-input",
+        value: customName,
+        placeholder: row.name,
+        onInput: (event) => updateHoldingProfile(row, "name", event.target.value),
+      });
+    },
+  },
+  {
+    title: "颜色",
+    key: "color",
+    width: 90,
+    render: (row) => {
+      const color = holdingProfiles.value[row.code]?.color || "#d03050";
+      if (hideAmount.value) return "***";
+      if (!editHoldingInfo.value) {
+        return h("span", { class: "holding-color-swatch", style: { backgroundColor: color }, title: color });
+      }
+      return h(NColorPicker, {
+        value: color,
+        swatches: presetColors,
+        modes: ["hex"],
+        showAlpha: false,
+        size: "small",
+        onUpdateValue: (value) => setHoldingColor(row, value),
+        "onUpdate:value": (value) => setHoldingColor(row, value),
+      });
+    },
   },
   {
     title: "持仓",
@@ -262,6 +368,8 @@ const pieData = computed(() => {
     .filter((h) => !h.cleared)
     .map((h) => ({
       name: h.name,
+      customName: holdingProfiles.value[h.code]?.name || h.name,
+      color: holdingProfiles.value[h.code]?.color || "#d03050",
       value: h[pieMetric.value] || 0,
     }))
     .filter((d) => d.value > 0)
@@ -292,8 +400,9 @@ const pieOption = computed(() => {
       radius: "60%",
       center: ["50%", "45%"],
       data: data.map((d, i) => ({
-        name: hideAmount.value ? `***${i}` : d.name,
+        name: hideAmount.value ? `***${i}` : d.customName,
         value: d.value,
+        itemStyle: { color: d.color },
       })),
       label: {
         show: true,
