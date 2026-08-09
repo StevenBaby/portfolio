@@ -21,6 +21,9 @@
         </div>
 
         <div class="app-content">
+          <MarketPage
+            v-if="tab === 'market'"
+          />
           <TradesPage
             v-if="tab === 'trades'"
             ref="tradesRef"
@@ -56,8 +59,10 @@ import {
 import { persistedRef } from "./parse.js";
 import TradesPage from "./pages/TradesPage.vue";
 import HoldingsPage from "./pages/HoldingsPage.vue";
+import MarketPage from "./pages/MarketPage.vue";
 
 const tabs = [
+  { key: "market", label: "市场" },
   { key: "holdings", label: "持仓" },
   { key: "trades", label: "明细" },
 ];
