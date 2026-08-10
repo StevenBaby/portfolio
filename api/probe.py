@@ -66,12 +66,40 @@ def _is_trading_hours() -> bool:
     return 915 <= hour_min <= 1530
 
 
+def _is_us_trading_hours() -> bool:
+    """美股交易时段（北京时间 21:30-次日 04:00，夏令时 22:30-次日 05:00）"""
+    now = datetime.now()
+    if now.weekday() >= 5:
+        return False
+    hour_min = now.hour * 100 + now.minute
+    return hour_min >= 2130 or hour_min <= 400
+
+
+def _is_asia_trading_hours() -> bool:
+    """亚太股市交易时段（北京时间）: 日本/韩国 08:00-14:00, 港股 09:30-16:00"""
+    now = datetime.now()
+    if now.weekday() >= 5:
+        return False
+    hour_min = now.hour * 100 + now.minute
+    return 800 <= hour_min <= 1600
+
+
+def _is_commodity_trading_hours() -> bool:
+    """商品交易时段（北京时间）: 现货近24小时, 期货 09:00-次日 03:00"""
+    now = datetime.now()
+    if now.weekday() >= 5:
+        return False
+    hour_min = now.hour * 100 + now.minute
+    return hour_min >= 900 or hour_min <= 300
+
+
 def _cached_get(category: str) -> dict | None:
-    """从缓存获取。交易时段内要求日期为今天，休市时返回最近成功数据。"""
+    """从缓存获取。任一相关市场在交易时段内时要求日期为今天。"""
     data = _cache.get(category)
     if not data or not _is_fresh(data):
         return None
-    if _is_trading_hours():
+    is_trading = _is_trading_hours() or _is_us_trading_hours() or _is_asia_trading_hours() or _is_commodity_trading_hours()
+    if is_trading:
         dates = []
         def _collect_dates(d, depth=0):
             if depth > 5:

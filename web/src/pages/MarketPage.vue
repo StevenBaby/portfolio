@@ -173,26 +173,68 @@ if (subTab.value !== "probe") subTab.value = "probe";
 const data = ref(null);
 const loading = ref(true);
 
-const isTradingHours = (() => {
+const isAnyTrading = (() => {
   const now = new Date();
-  if (now.getDay() === 0 || now.getDay() === 6) return false;
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false;
   const hm = now.getHours() * 100 + now.getMinutes();
-  return hm >= 915 && hm <= 1530;
+  if (hm >= 915 && hm <= 1530) return true;
+  if (hm >= 2130 || hm <= 400) return true;
+  if (hm >= 800 && hm <= 1600) return true;
+  if (hm >= 900 || hm <= 300) return true;
+  return false;
 })();
 
-const fmtDate = (date) => {
+const isUsTrading = (() => {
+  const now = new Date();
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false;
+  const hm = now.getHours() * 100 + now.getMinutes();
+  return hm >= 2130 || hm <= 400;
+})();
+
+const isAsiaTrading = (() => {
+  const now = new Date();
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false;
+  const hm = now.getHours() * 100 + now.getMinutes();
+  return hm >= 800 && hm <= 1600;
+})();
+
+const isCommodityTrading = (() => {
+  const now = new Date();
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false;
+  const hm = now.getHours() * 100 + now.getMinutes();
+  return hm >= 900 || hm <= 300;
+})();
+
+const isUsMarketItem = (name) => {
+  const usKeywords = ['道琼斯','纳斯达克','标普','半导体ETF','TQQQ','英伟达','苹果','微软','谷歌','亚马逊','特斯拉'];
+  return usKeywords.some(k => name?.includes(k));
+};
+
+const isAsiaMarketItem = (name) => {
+  const asiaKeywords = ['日经','恒生','KOSPI','韩国'];
+  return asiaKeywords.some(k => name?.includes(k));
+};
+
+const isCommodityItem = (name) => {
+  const commKeywords = ['金','银','原油','WTI','COMEX','伦敦'];
+  return commKeywords.some(k => name?.includes(k));
+};
+
+const fmtDate = (date, name) => {
   if (!date) return "";
-  if (isTradingHours) {
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
-    return date === todayStr ? "" : `(${date})`;
-  }
+  if (name && isUsMarketItem(name) && isUsTrading) return "";
+  if (name && isAsiaMarketItem(name) && isAsiaTrading) return "";
+  if (name && isCommodityItem(name) && isCommodityTrading) return "";
   return `(${date})`;
 };
 
 const fmtName = (item) => {
   if (!item?.date) return item?.name;
-  const suffix = fmtDate(item.date);
+  const suffix = fmtDate(item.date, item.name);
   return suffix ? `${item.name}${suffix}` : item.name;
 };
 const fmtNum = (v) => (v != null ? Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 }) : "--");
