@@ -57,20 +57,20 @@
         <div class="probe-section-title">融资融券</div>
         <div class="probe-cards">
           <div class="probe-card">
-            <div class="probe-name">融资余额({{ data.margin.data.date }})</div>
+            <div class="probe-name">融资余额{{ fmtDate(data.margin.data.date) }}</div>
             <div class="probe-price">{{ fmtYi(data.margin.data.rzye) }}</div>
             <div class="probe-pct" :class="pctClass(data.margin.data.rzmr_pct)">{{ fmtPct(data.margin.data.rzmr_pct) }}</div>
           </div>
           <div class="probe-card">
-            <div class="probe-name">融券余额({{ data.margin.data.date }})</div>
+            <div class="probe-name">融券余额{{ fmtDate(data.margin.data.date) }}</div>
             <div class="probe-price">{{ fmtYi(data.margin.data.rqye) }}</div>
           </div>
           <div class="probe-card">
-            <div class="probe-name">融资融券余额({{ data.margin.data.date }})</div>
+            <div class="probe-name">融资融券余额{{ fmtDate(data.margin.data.date) }}</div>
             <div class="probe-price">{{ fmtYi(data.margin.data.rzrqye) }}</div>
           </div>
           <div class="probe-card">
-            <div class="probe-name">融资买入额({{ data.margin.data.date }})</div>
+            <div class="probe-name">融资买入额{{ fmtDate(data.margin.data.date) }}</div>
             <div class="probe-price">{{ fmtYi(data.margin.data.rzmr) }}</div>
           </div>
         </div>
@@ -82,7 +82,7 @@
         <div class="probe-section-title">港股通</div>
         <div class="probe-cards">
           <div v-for="item in data.hk_connect.data" :key="item.type" class="probe-card">
-            <div class="probe-name">{{ item.type }}({{ item.date }})</div>
+            <div class="probe-name">{{ item.type }}{{ fmtDate(item.date) }}</div>
             <div class="probe-price">{{ fmtWanYi(item.deal_amt) }}</div>
             <div class="probe-pct" :class="pctClass(item.net_buy)">{{ item.net_buy != null ? fmtWanYi(item.net_buy) : '--' }}</div>
           </div>
@@ -173,7 +173,28 @@ if (subTab.value !== "probe") subTab.value = "probe";
 const data = ref(null);
 const loading = ref(true);
 
-const fmtName = (item) => item?.date ? `${item.name}(${item.date})` : item?.name;
+const isTradingHours = (() => {
+  const now = new Date();
+  if (now.getDay() === 0 || now.getDay() === 6) return false;
+  const hm = now.getHours() * 100 + now.getMinutes();
+  return hm >= 915 && hm <= 1530;
+})();
+
+const fmtDate = (date) => {
+  if (!date) return "";
+  if (isTradingHours) {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+    return date === todayStr ? "" : `(${date})`;
+  }
+  return `(${date})`;
+};
+
+const fmtName = (item) => {
+  if (!item?.date) return item?.name;
+  const suffix = fmtDate(item.date);
+  return suffix ? `${item.name}${suffix}` : item.name;
+};
 const fmtNum = (v) => (v != null ? Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 }) : "--");
 const fmtYi = (v) => (v != null ? `${(v / 1e8).toFixed(2)}亿` : "--");
 const fmtWanYi = (v) => (v != null ? `${(v / 100).toFixed(2)}亿` : "--");

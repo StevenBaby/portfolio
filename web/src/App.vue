@@ -56,7 +56,7 @@ import {
   zhCN,
   dateZhCN,
 } from "naive-ui";
-import { persistedRef } from "./parse.js";
+import { persistedRef, loadHoldingProfiles } from "./parse.js";
 import TradesPage from "./pages/TradesPage.vue";
 import HoldingsPage from "./pages/HoldingsPage.vue";
 import MarketPage from "./pages/MarketPage.vue";
@@ -83,6 +83,7 @@ onMounted(async () => {
     trades.value = data;
     holdings.value = await holdingsResp.json();
     await fetchQuotes();
+    await loadHoldingProfiles();
   } catch (e) {
     console.error("加载数据失败:", e);
   }

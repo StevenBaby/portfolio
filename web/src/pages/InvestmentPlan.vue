@@ -3,6 +3,7 @@
     <div class="plan-form">
       <n-select v-model:value="form.code" :options="codeOptions" :disabled="Boolean(editingCode)" placeholder="选择持仓" size="small" style="width: 180px" />
       <n-input-number v-model:value="form.amount" :min="1" :precision="2" placeholder="定投金额" size="small" style="width: 140px" />
+      <n-input-number v-model:value="form.holdings" :min="0" placeholder="定投持仓" size="small" style="width: 120px" />
       <n-select v-model:value="form.frequency" :options="frequencyOptions" size="small" style="width: 100px" />
       <n-date-picker v-model:value="form.nextDate" type="date" clearable size="small" style="width: 150px" />
       <n-checkbox v-model:checked="form.enabled">启用</n-checkbox>
@@ -45,7 +46,7 @@ const API = import.meta.env.DEV ? "http://localhost:8090" : "";
 const plans = ref([]);
 const error = ref("");
 const editingCode = ref(null);
-const form = reactive({ code: null, amount: null, frequency: "每月", nextDate: null, enabled: true });
+const form = reactive({ code: null, amount: null, holdings: null, frequency: "每月", nextDate: null, enabled: true });
 const frequencyOptions = [{ value: "每周", label: "每周" }, { value: "每月", label: "每月" }];
 const codeOptions = computed(() => props.holdings.filter((h) => h.shares > 0).map((h) => ({ value: h.code, label: `${h.code} ${h.name}` })));
 
@@ -71,17 +72,17 @@ async function loadPlans() {
 }
 function resetForm() {
   editingCode.value = null;
-  Object.assign(form, { code: null, amount: null, frequency: "每月", nextDate: null, enabled: true });
+  Object.assign(form, { code: null, amount: null, holdings: null, frequency: "每月", nextDate: null, enabled: true });
 }
 function editPlan(plan) {
   editingCode.value = plan.code;
-  Object.assign(form, { code: plan.code, amount: Number(plan.amount), frequency: plan.frequency, nextDate: textToDate(plan.next_date), enabled: plan.enabled === "1" });
+  Object.assign(form, { code: plan.code, amount: Number(plan.amount), holdings: Number(plan.holdings) || 0, frequency: plan.frequency, nextDate: textToDate(plan.next_date), enabled: plan.enabled === "1" });
 }
 async function savePlan() {
   error.value = "";
   if (!form.code || !form.amount || !form.nextDate) { error.value = "请选择持仓并填写金额和日期"; return; }
   const holding = props.holdings.find((item) => item.code === form.code);
-  const response = await fetch(`${API}/api/plan`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: form.code, name: holding?.name || "", amount: form.amount, frequency: form.frequency, next_date: dateToText(form.nextDate), enabled: form.enabled }) });
+  const response = await fetch(`${API}/api/plan`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: form.code, name: holding?.name || "", amount: form.amount, holdings: form.holdings || 0, frequency: form.frequency, next_date: dateToText(form.nextDate), enabled: form.enabled }) });
   if (!response.ok) { error.value = "定投计划保存失败"; return; }
   await loadPlans();
   resetForm();
@@ -110,6 +111,7 @@ const columns = [
       h("span", { class: "holding-name-color", style: { backgroundColor: color }, title: color }),
     ]);
   } },
+  { title: "定投持仓", key: "holdings", width: 100, render: (row) => Number(row.holdings || 0).toLocaleString() },
   { title: "定投金额", key: "amount", width: 110, render: (row) => `¥${Number(row.amount).toFixed(2)}` },
   { title: "周期", key: "frequency", width: 75 },
   { title: "下次定投", key: "next_date", width: 120 },

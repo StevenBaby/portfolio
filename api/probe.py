@@ -49,12 +49,45 @@ def _is_fresh(data: dict) -> bool:
     return _has_value(data)
 
 
+def _is_today(date_str: str | None) -> bool:
+    """判断日期字符串是否是今天"""
+    if not date_str:
+        return False
+    today = datetime.now().strftime('%Y-%m-%d')
+    return date_str == today or date_str.startswith(today)
+
+
+def _is_trading_hours() -> bool:
+    """判断当前是否在A股交易时段（周一到周五 9:15-15:30）"""
+    now = datetime.now()
+    if now.weekday() >= 5:
+        return False
+    hour_min = now.hour * 100 + now.minute
+    return 915 <= hour_min <= 1530
+
+
 def _cached_get(category: str) -> dict | None:
-    """从缓存获取。休市时返回最近成功数据（无TTL过期）。"""
+    """从缓存获取。交易时段内要求日期为今天，休市时返回最近成功数据。"""
     data = _cache.get(category)
-    if data and _is_fresh(data):
-        return data
-    return None
+    if not data or not _is_fresh(data):
+        return None
+    if _is_trading_hours():
+        dates = []
+        def _collect_dates(d, depth=0):
+            if depth > 5:
+                return
+            if isinstance(d, dict):
+                if 'date' in d and d['date']:
+                    dates.append(d['date'])
+                for v in d.values():
+                    _collect_dates(v, depth + 1)
+            elif isinstance(d, list):
+                for v in d:
+                    _collect_dates(v, depth + 1)
+        _collect_dates(data)
+        if dates and not any(_is_today(d) for d in dates):
+            return None
+    return data
 
 
 def _cache_set(category: str, data: dict):

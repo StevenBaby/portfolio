@@ -231,7 +231,7 @@ const metricOptions = [
 ];
 
 function selectAllLegend() {
-  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value, props.trades, dailyMv.value, holdingProfiles.value);
+  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value, props.trades, dailyMv.value, holdingProfiles.value, props.quotes);
   const sel = {};
   series.forEach((s) => {
     sel[s.code] = true;
@@ -240,7 +240,7 @@ function selectAllLegend() {
 }
 
 function clearAllLegend() {
-  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value, props.trades, dailyMv.value, holdingProfiles.value);
+  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value, props.trades, dailyMv.value, holdingProfiles.value, props.quotes);
   const sel = {};
   series.forEach((s) => {
     sel[s.code] = false;
@@ -536,7 +536,8 @@ const chartOption = computed(() => {
     chartMetric.value,
     props.trades,
     dailyMv.value,
-    holdingProfiles.value
+    holdingProfiles.value,
+    props.quotes
   );
   const filteredSeries = series.filter((s) => s.data.some((v) => v !== 0));
   return {
@@ -637,7 +638,8 @@ const lineChartOption = computed(() => {
     chartMetric.value,
     props.trades,
     dailyMv.value,
-    holdingProfiles.value
+    holdingProfiles.value,
+    props.quotes
   );
 
   let cumSeries;

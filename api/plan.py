@@ -10,8 +10,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 PLAN_FILE = Path(__file__).resolve().parents[1] / "trade" / "plan.csv"
-PLAN_FIELDS = ("代码", "名称", "金额", "周期", "下次定投", "启用")
-PLAN_KEYS = ("code", "name", "amount", "frequency", "next_date", "enabled")
+PLAN_FIELDS = ("代码", "名称", "金额", "定投持仓", "周期", "下次定投", "启用")
+PLAN_KEYS = ("code", "name", "amount", "holdings", "frequency", "next_date", "enabled")
 FREQUENCIES = {"每周", "每月"}
 
 router = APIRouter(prefix="/api/plan", tags=["plan"])
@@ -21,6 +21,7 @@ class InvestmentPlan(BaseModel):
     code: str = Field(pattern=r"^\d{6}$")
     name: str
     amount: float = Field(gt=0)
+    holdings: int = Field(default=0, ge=0)
     frequency: str
     next_date: date
     enabled: bool = True
@@ -61,6 +62,7 @@ def save_plan(plan: InvestmentPlan) -> dict:
         "code": plan.code,
         "name": plan.name.strip(),
         "amount": f"{plan.amount:.2f}",
+        "holdings": str(plan.holdings),
         "frequency": plan.frequency,
         "next_date": plan.next_date.isoformat(),
         "enabled": "1" if plan.enabled else "0",

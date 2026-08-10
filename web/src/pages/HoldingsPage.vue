@@ -70,6 +70,7 @@ import {
   pctFormat,
   persistedRef,
   holdingProfiles,
+  saveHoldingProfile,
 } from "../parse.js";
 
 use([CanvasRenderer, PieChart, LegendComponent, TooltipComponent]);
@@ -213,13 +214,13 @@ watch(
 );
 
 function updateHoldingProfile(row, field, value) {
+  const current = holdingProfiles.value[row.code] || {};
+  const updated = { ...current, [field]: value };
   holdingProfiles.value = {
     ...holdingProfiles.value,
-    [row.code]: {
-      ...(holdingProfiles.value[row.code] || {}),
-      [field]: value,
-    },
+    [row.code]: updated,
   };
+  saveHoldingProfile(row.code, updated.name || "", updated.color || "#d03050");
 }
 
 const holdingColumns = computed(() => [

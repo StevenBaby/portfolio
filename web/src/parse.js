@@ -42,13 +42,39 @@ export function persistedRef(key, defaultValue) {
   return r;
 }
 
-const storedHoldingProfiles = localStorage.getItem("holding_profiles");
-export const holdingProfiles = ref(
-  storedHoldingProfiles ? JSON.parse(storedHoldingProfiles) : {}
-);
-watch(holdingProfiles, (value) => {
-  localStorage.setItem("holding_profiles", JSON.stringify(value));
-}, { deep: true });
+export const holdingProfiles = ref({});
+
+const API_BASE = import.meta.env.DEV ? "http://localhost:8090" : "";
+
+export async function loadHoldingProfiles() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/profile`);
+    const data = await resp.json();
+    const map = {};
+    for (const item of data) {
+      map[item.code] = { name: item.name || "", color: item.color || "#d03050" };
+    }
+    holdingProfiles.value = map;
+  } catch (e) {
+    console.error("加载持仓配置失败:", e);
+  }
+}
+
+const _saveTimers = {};
+export function saveHoldingProfile(code, name, color) {
+  if (_saveTimers[code]) clearTimeout(_saveTimers[code]);
+  _saveTimers[code] = setTimeout(async () => {
+    try {
+      await fetch(`${API_BASE}/api/profile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, name: name || "", color: color || "#d03050" }),
+      });
+    } catch (e) {
+      console.error("保存持仓配置失败:", e);
+    }
+  }, 500);
+}
 
 /**
  * 盈亏渲染：带正负号 + 红绿色 + 隐藏支持
@@ -104,7 +130,7 @@ export function getTradeType(record) {
  * 按日期+品种聚合交易金额，用于直方图
  * 返回 { dates: [...], series: [{ name, data: [...] }] }
  */
-export function aggregateByDate(trades, metric = "amount", calculationTrades = trades, dailyMarketValue = {}, profiles = {}) {
+export function aggregateByDate(trades, metric = "amount", calculationTrades = trades, dailyMarketValue = {}, profiles = {}, quotes = {}) {
   const byCode = {};
   const costByCode = {};
   const snapshots = {};
@@ -167,7 +193,10 @@ export function aggregateByDate(trades, metric = "amount", calculationTrades = t
       let previousMarketValue = 0;
       for (const date of dates) {
         snapshot = snapshots[code]?.[date] || snapshot;
-        const marketValue = dailyMarketValue[date.replace(/-/g, "")]?.[code] || 0;
+        let marketValue = dailyMarketValue[date.replace(/-/g, "")]?.[code] || 0;
+        if (date === dates[dates.length - 1] && quotes[code]?.price) {
+          marketValue = quotes[code].price * snapshot.shares;
+        }
         const floating = marketValue - snapshot.cost;
         if (metric === "cumulative_pnl") {
           info.data[date] = snapshot.realized + floating;
