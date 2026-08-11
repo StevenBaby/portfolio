@@ -23,7 +23,14 @@ import time
 import urllib.request
 import urllib.error
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+_CST = timezone(timedelta(hours=8))
+
+
+def _now_cst() -> datetime:
+    """当前北京时间"""
+    return datetime.now(_CST)
 
 # ============================================================
 # 缓存: 永不过期，新数据到达时覆盖。休市时自动使用最近一次成功获取的数据。
@@ -53,13 +60,13 @@ def _is_today(date_str: str | None) -> bool:
     """判断日期字符串是否是今天"""
     if not date_str:
         return False
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = _now_cst().strftime('%Y-%m-%d')
     return date_str == today or date_str.startswith(today)
 
 
 def _is_trading_hours() -> bool:
     """判断当前是否在A股交易时段（周一到周五 9:15-15:30）"""
-    now = datetime.now()
+    now = _now_cst()
     if now.weekday() >= 5:
         return False
     hour_min = now.hour * 100 + now.minute
@@ -68,7 +75,7 @@ def _is_trading_hours() -> bool:
 
 def _is_us_trading_hours() -> bool:
     """美股交易时段（北京时间 21:30-次日 04:00，夏令时 22:30-次日 05:00）"""
-    now = datetime.now()
+    now = _now_cst()
     if now.weekday() >= 5:
         return False
     hour_min = now.hour * 100 + now.minute
@@ -77,7 +84,7 @@ def _is_us_trading_hours() -> bool:
 
 def _is_asia_trading_hours() -> bool:
     """亚太股市交易时段（北京时间）: 日本/韩国 08:00-14:00, 港股 09:30-16:00"""
-    now = datetime.now()
+    now = _now_cst()
     if now.weekday() >= 5:
         return False
     hour_min = now.hour * 100 + now.minute
@@ -86,7 +93,7 @@ def _is_asia_trading_hours() -> bool:
 
 def _is_commodity_trading_hours() -> bool:
     """商品交易时段（北京时间）: 现货近24小时, 期货 09:00-次日 03:00"""
-    now = datetime.now()
+    now = _now_cst()
     if now.weekday() >= 5:
         return False
     hour_min = now.hour * 100 + now.minute
@@ -245,7 +252,7 @@ def _fetch_sina(codes: str) -> dict:
                     if code.startswith("b_") and len(fields) > 6:
                         date = fields[6]
                     elif code.startswith("int_"):
-                        date = datetime.now().strftime("%Y-%m-%d")
+                        date = _now_cst().strftime("%Y-%m-%d")
                     else:
                         date = None
                 except (ValueError, IndexError):
@@ -350,7 +357,7 @@ def get_us_market(force_refresh: bool = False) -> dict:
         "indices": {},
         "leveraged": {},
         "tech": {},
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": _now_cst().isoformat(),
     }
 
     qt_codes = ",".join(US_INDICES_QT.values())
@@ -405,7 +412,7 @@ def get_asia_market(force_refresh: bool = False) -> dict:
     result = {
         "indices": {},
         "futures": {},
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": _now_cst().isoformat(),
     }
 
     sina_codes = ",".join(ASIA_SINA.values())
@@ -436,7 +443,7 @@ def get_macro(force_refresh: bool = False) -> dict:
     result = {
         "dxy": None,
         "usdcnh": None,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": _now_cst().isoformat(),
     }
 
     sina = _fetch_sina("DINIW")
@@ -478,7 +485,7 @@ def get_commodities(force_refresh: bool = False) -> dict:
     result = {
         "spot": {},
         "futures": {},
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": _now_cst().isoformat(),
     }
 
     sina_codes = ",".join(COMMODITY_SINA.values())
@@ -509,7 +516,7 @@ def get_cn_indices(force_refresh: bool = False) -> dict:
     if cached:
         return cached
 
-    result = {"indices": {}, "timestamp": datetime.now().isoformat()}
+    result = {"indices": {}, "timestamp": _now_cst().isoformat()}
     qt_codes = ",".join(CN_QT.values())
     qt_data = _fetch_qt(qt_codes)
     for name, code in CN_QT.items():
@@ -526,7 +533,7 @@ def get_margin_trading(force_refresh: bool = False) -> dict:
     if cached:
         return cached
 
-    result = {"data": None, "timestamp": datetime.now().isoformat()}
+    result = {"data": None, "timestamp": _now_cst().isoformat()}
     url = (
         "https://datacenter-web.eastmoney.com/api/data/v1/get"
         "?reportName=RPTA_RZRQ_LSHJ"
@@ -560,13 +567,90 @@ def get_margin_trading(force_refresh: bool = False) -> dict:
     return result
 
 
+def get_capital_flow(force_refresh: bool = False) -> dict:
+    """大盘资金流向: 上证/深证主力净流入、超大单、大单、中单、小单（交易中取实时，收盘后取日K）"""
+    cached = None if force_refresh else _cached_get('capital_flow')
+    if cached:
+        return cached
+
+    result = {'data': [], 'timestamp': _now_cst().isoformat()}
+    codes = {'000001': '上证指数', '399001': '深证成指'}
+    is_trading = _is_trading_hours()
+    for code, name in codes.items():
+        market = '1' if code.startswith('5') or code.startswith('0') else '0'
+        if is_trading:
+            url = (
+                f'http://push2.eastmoney.com/api/qt/stock/fflow/kline/get'
+                f'?secid={market}.{code}'
+                f'&fields1=f1,f2,f3,f7'
+                f'&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63'
+                f'&klt=1&lmt=1'
+            )
+        else:
+            url = (
+                f'http://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get'
+                f'?secid={market}.{code}'
+                f'&fields1=f1,f2,f3,f7'
+                f'&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63'
+                f'&klt=101&lmt=1'
+            )
+        try:
+            import subprocess
+            r = subprocess.run(
+                ['curl', '-fsS', '--retry', '3', '--retry-delay', '1', '--http1.1',
+                 '-A', 'Mozilla/5.0', url],
+                capture_output=True, text=True, timeout=15,
+            )
+            payload = json.loads(r.stdout)
+            klines = (payload.get('data') or {}).get('klines') or []
+            if klines:
+                fields = klines[-1].split(',')
+                if is_trading:
+                    # 分时数据: [时间, 主力, 超大单, 大单, 中单, 小单]
+                    result['data'].append({
+                        'code': code,
+                        'name': name,
+                        'date': fields[0].split(' ')[0],
+                        'time': fields[0].split(' ')[1] if ' ' in fields[0] else '',
+                        'main': _float(fields[1]),
+                        'super_large': _float(fields[2]),
+                        'large': _float(fields[3]),
+                        'medium': _float(fields[4]),
+                        'small': _float(fields[5]),
+                        'main_pct': None,
+                        'close': None,
+                        'pct': None,
+                    })
+                else:
+                    # 日K数据: [日期, 主力, 超大单, 大单, 中单, 小单, 主力占比%, ..., 收盘价, 涨跌幅%]
+                    result['data'].append({
+                        'code': code,
+                        'name': name,
+                        'date': fields[0],
+                        'time': '',
+                        'main': _float(fields[1]),
+                        'super_large': _float(fields[2]),
+                        'large': _float(fields[3]),
+                        'medium': _float(fields[4]),
+                        'small': _float(fields[5]),
+                        'main_pct': _float(fields[6]),
+                        'close': _float(fields[11]),
+                        'pct': _float(fields[12]),
+                    })
+        except Exception:
+            pass
+
+    _cache_set('capital_flow', result)
+    return result
+
+
 def get_hk_connect(force_refresh: bool = False) -> dict:
     """港股通: 北向沪股通/深股通 + 南向港股通(沪)/(深)"""
     cached = None if force_refresh else _cached_get("hk_connect")
     if cached:
         return cached
 
-    result = {"data": [], "timestamp": datetime.now().isoformat()}
+    result = {"data": [], "timestamp": _now_cst().isoformat()}
     url = (
         "https://datacenter-web.eastmoney.com/api/data/v1/get"
         "?reportName=RPT_MUTUAL_DEAL_HISTORY"
@@ -617,7 +701,7 @@ def get_all_probes(force_refresh: bool = False) -> dict:
         "hk_connect": get_hk_connect(force_refresh),
         "macro": get_macro(force_refresh),
         "commodities": get_commodities(force_refresh),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": _now_cst().isoformat(),
     }
 
     _cache_set("all", result)

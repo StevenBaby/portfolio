@@ -21,6 +21,7 @@ from api.probe import (
     get_cn_indices,
     get_margin_trading,
     get_hk_connect,
+    get_capital_flow,
     get_us_market,
     get_asia_market,
     get_macro,
@@ -115,6 +116,12 @@ def probe_margin() -> dict:
 def probe_hk_connect() -> dict:
     """港股通: 南向/北向成交额和净买入"""
     return get_hk_connect()
+
+
+@app.get("/api/probe/capital_flow")
+def probe_capital_flow() -> dict:
+    """大盘资金流向: 上证/深证主力净流入"""
+    return get_capital_flow()
 
 
 @app.get("/api/probe/asia")

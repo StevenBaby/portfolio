@@ -2,6 +2,7 @@
   <div class="page-container">
     <div class="sub-tabs">
       <div class="sub-tab" :class="{active: subTab==='probe'}" @click="subTab='probe'">探针</div>
+      <div class="sub-tab" :class="{active: subTab==='flow'}" @click="subTab='flow'">资金流</div>
     </div>
     <div v-show="subTab==='probe'" style="overflow:auto;flex:1;padding:0 4px">
       <div v-if="loading" class="probe-loading">加载中...</div>
@@ -160,6 +161,43 @@
       </div>
     </template>
     </div>
+
+    <div v-show="subTab==='flow'" style="overflow:auto;flex:1;padding:0 4px">
+      <div v-if="flowLoading" class="probe-loading">加载中...</div>
+      <template v-if="flowData && !flowLoading">
+        <div v-for="item in flowData.data" :key="item.code" class="probe-section">
+          <div class="probe-section-title">{{ item.name }}({{ item.date }}{{ item.time ? ' ' + item.time : '' }})</div>
+          <div class="probe-cards">
+            <div class="probe-card">
+              <div class="probe-name">主力净流入</div>
+              <div class="probe-price" :class="item.main >= 0 ? 'amount-positive' : 'amount-negative'">{{ fmtYi(item.main) }}</div>
+              <div class="probe-pct" :class="item.main_pct >= 0 ? 'amount-positive' : 'amount-negative'">{{ fmtPct(item.main_pct) }}</div>
+            </div>
+            <div class="probe-card">
+              <div class="probe-name">超大单</div>
+              <div class="probe-price" :class="item.super_large >= 0 ? 'amount-positive' : 'amount-negative'">{{ fmtYi(item.super_large) }}</div>
+            </div>
+            <div class="probe-card">
+              <div class="probe-name">大单</div>
+              <div class="probe-price" :class="item.large >= 0 ? 'amount-positive' : 'amount-negative'">{{ fmtYi(item.large) }}</div>
+            </div>
+            <div class="probe-card">
+              <div class="probe-name">中单</div>
+              <div class="probe-price" :class="item.medium >= 0 ? 'amount-positive' : 'amount-negative'">{{ fmtYi(item.medium) }}</div>
+            </div>
+            <div class="probe-card">
+              <div class="probe-name">小单</div>
+              <div class="probe-price" :class="item.small >= 0 ? 'amount-positive' : 'amount-negative'">{{ fmtYi(item.small) }}</div>
+            </div>
+            <div v-if="item.close != null" class="probe-card">
+              <div class="probe-name">收盘价</div>
+              <div class="probe-price">{{ fmtNum(item.close) }}</div>
+              <div class="probe-pct" :class="item.pct >= 0 ? 'amount-positive' : 'amount-negative'">{{ fmtPct(item.pct) }}</div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -169,7 +207,6 @@ import { persistedRef } from "../parse.js";
 
 const API = import.meta.env.DEV ? "http://localhost:8090" : "";
 const subTab = persistedRef("market_subTab", "probe");
-if (subTab.value !== "probe") subTab.value = "probe";
 const data = ref(null);
 const loading = ref(true);
 
@@ -209,6 +246,14 @@ const isCommodityTrading = (() => {
   return hm >= 900 || hm <= 300;
 })();
 
+const isChinaTrading = (() => {
+  const now = new Date();
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false;
+  const hm = now.getHours() * 100 + now.getMinutes();
+  return hm >= 915 && hm <= 1530;
+})();
+
 const isUsMarketItem = (name) => {
   const usKeywords = ['道琼斯','纳斯达克','标普','半导体ETF','TQQQ','英伟达','苹果','微软','谷歌','亚马逊','特斯拉'];
   return usKeywords.some(k => name?.includes(k));
@@ -224,11 +269,17 @@ const isCommodityItem = (name) => {
   return commKeywords.some(k => name?.includes(k));
 };
 
+const isChinaMarketItem = (name) => {
+  const cnKeywords = ['上证','深证','创业板','沪深','中证','科创'];
+  return cnKeywords.some(k => name?.includes(k));
+};
+
 const fmtDate = (date, name) => {
   if (!date) return "";
   if (name && isUsMarketItem(name) && isUsTrading) return "";
   if (name && isAsiaMarketItem(name) && isAsiaTrading) return "";
   if (name && isCommodityItem(name) && isCommodityTrading) return "";
+  if (name && isChinaMarketItem(name) && isChinaTrading) return "";
   return `(${date})`;
 };
 
@@ -243,6 +294,27 @@ const fmtWanYi = (v) => (v != null ? `${(v / 100).toFixed(2)}亿` : "--");
 const fmtPct = (v) => (v != null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "--");
 const pctClass = (v) => (v != null ? (v >= 0 ? "amount-positive" : "amount-negative") : "");
 
+const flowData = ref(null);
+const flowLoading = ref(false);
+
+async function loadFlowData() {
+  if (flowData.value) return;
+  flowLoading.value = true;
+  try {
+    const resp = await fetch(`${API}/api/probe/capital_flow`);
+    flowData.value = await resp.json();
+  } catch (e) {
+    console.error("资金流加载失败:", e);
+  } finally {
+    flowLoading.value = false;
+  }
+}
+
+import { watch } from "vue";
+watch(subTab, (val) => {
+  if (val === "flow") loadFlowData();
+});
+
 onMounted(async () => {
   try {
     const resp = await fetch(`${API}/api/probe/all`);
@@ -252,5 +324,6 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+  if (subTab.value === "flow") loadFlowData();
 });
 </script>
