@@ -76,6 +76,28 @@ export function saveHoldingProfile(code, name, color) {
   }, 500);
 }
 
+export async function loadTotalCost() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/profile/total_cost`);
+    return (await resp.json()).total_cost || 0;
+  } catch (e) {
+    console.error("加载总成本失败:", e);
+    return 0;
+  }
+}
+
+export async function saveTotalCost(cost) {
+  try {
+    await fetch(`${API_BASE}/api/profile/total_cost`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ total_cost: cost }),
+    });
+  } catch (e) {
+    console.error("保存总成本失败:", e);
+  }
+}
+
 /**
  * 盈亏渲染：带正负号 + 红绿色 + 隐藏支持
  * 返回 { text, cls } 供调用方决定如何渲染

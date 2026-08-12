@@ -18,6 +18,25 @@
         </div>
       </div>
       <div class="stat-card">
+        <div class="stat-label">总成本</div>
+        <div class="stat-value" @dblclick="editTotalCost" style="cursor:pointer">
+          <template v-if="editingTotalCost">
+            <input
+              ref="totalCostInput"
+              v-model.number="totalCostInputValue"
+              class="holding-profile-input"
+              style="width:120px"
+              @blur="saveTotalCostEdit"
+              @keyup.enter="saveTotalCostEdit"
+              @keyup.esc="cancelTotalCostEdit"
+            />
+          </template>
+          <template v-else>
+            {{ displayData(globalTotalCost, hideAmount, (v) => "¥" + v.toFixed(2), "***") }}
+          </template>
+        </div>
+      </div>
+      <div class="stat-card">
         <div class="stat-label">总盈亏</div>
         <div class="stat-value" :class="totalPnlResult.cls">
           {{ totalPnlResult.text }}
@@ -55,7 +74,7 @@
 </template>
 
 <script setup>
-import { ref, computed, h, watch } from "vue";
+import { ref, computed, h, watch, nextTick } from "vue";
 import { NDataTable, NTag, NCheckbox, NSelect, NColorPicker } from "naive-ui";
 import VChart from "vue-echarts";
 import { use } from "echarts/core";
@@ -71,6 +90,8 @@ import {
   persistedRef,
   holdingProfiles,
   saveHoldingProfile,
+  loadTotalCost,
+  saveTotalCost,
 } from "../parse.js";
 
 use([CanvasRenderer, PieChart, LegendComponent, TooltipComponent]);
@@ -222,6 +243,35 @@ function updateHoldingProfile(row, field, value) {
   };
   saveHoldingProfile(row.code, updated.name || "", updated.color || "#d03050");
 }
+
+// ============ 全局总成本 ============
+const globalTotalCost = ref(0);
+const editingTotalCost = ref(false);
+const totalCostInputValue = ref(0);
+const totalCostInput = ref(null);
+
+async function refreshTotalCost() {
+  globalTotalCost.value = await loadTotalCost();
+}
+
+function editTotalCost() {
+  if (hideAmount.value) return;
+  totalCostInputValue.value = globalTotalCost.value;
+  editingTotalCost.value = true;
+  nextTick(() => totalCostInput.value?.focus());
+}
+
+function saveTotalCostEdit() {
+  globalTotalCost.value = totalCostInputValue.value;
+  saveTotalCost(totalCostInputValue.value);
+  editingTotalCost.value = false;
+}
+
+function cancelTotalCostEdit() {
+  editingTotalCost.value = false;
+}
+
+refreshTotalCost();
 
 const holdingColumns = computed(() => [
   {

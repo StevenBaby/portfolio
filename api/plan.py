@@ -1,17 +1,18 @@
-"""Recurring investment plan CSV API."""
+"""Recurring investment plan API (reads/writes portfolio.json)."""
 
 from __future__ import annotations
 
-import csv
 from datetime import date
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-PLAN_FILE = Path(__file__).resolve().parents[1] / "trade" / "plan.csv"
-PLAN_FIELDS = ("代码", "名称", "金额", "定投持仓", "周期", "下次定投", "启用")
-PLAN_KEYS = ("code", "name", "amount", "holdings", "frequency", "next_date", "enabled")
+import json
+import threading
+
+CONFIG_FILE = Path(__file__).resolve().parents[1] / "trade" / "portfolio.json"
+_write_lock = threading.Lock()
 FREQUENCIES = {"每周", "每月"}
 
 router = APIRouter(prefix="/api/plan", tags=["plan"])
@@ -27,38 +28,59 @@ class InvestmentPlan(BaseModel):
     enabled: bool = True
 
 
-def _read_plans() -> list[dict]:
-    if not PLAN_FILE.is_file():
-        return []
-    with PLAN_FILE.open("r", encoding="utf-8", newline="") as stream:
-        return [
-            dict(zip(PLAN_KEYS, (row.get(field, "") for field in PLAN_FIELDS)))
-            for row in csv.DictReader(stream)
-        ]
+def _read_config() -> dict:
+    if not CONFIG_FILE.is_file():
+        return {"holdings": {}, "plans": []}
+    with CONFIG_FILE.open("r", encoding="utf-8") as f:
+        return json.load(f)
 
 
-def _write_plans(plans: list[dict]) -> None:
-    PLAN_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with PLAN_FILE.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=PLAN_FIELDS)
-        writer.writeheader()
-        writer.writerows(
-            {field: plan.get(key, "") for field, key in zip(PLAN_FIELDS, PLAN_KEYS)}
-            for plan in plans
-        )
+def _write_config(config: dict) -> None:
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with CONFIG_FILE.open("w", encoding="utf-8") as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
 
 
 @router.get("")
 def list_plans() -> list[dict]:
-    return _read_plans()
+    config = _read_config()
+    plans = config.get("plans", [])
+    return [
+        {
+            "code": p["code"],
+            "name": p.get("name", ""),
+            "amount": f"{p['amount']:.2f}",
+            "holdings": str(p.get("holdings", 0)),
+            "frequency": p.get("frequency", ""),
+            "next_date": p.get("next_date", ""),
+            "enabled": "1" if p.get("enabled", True) else "0",
+        }
+        for p in plans
+    ]
 
 
 @router.post("")
 def save_plan(plan: InvestmentPlan) -> dict:
     if plan.frequency not in FREQUENCIES:
         raise HTTPException(status_code=422, detail="frequency must be 每周 or 每月")
-
-    saved = {
+    with _write_lock:
+        config = _read_config()
+        plans = config.setdefault("plans", [])
+        plans = [p for p in plans if p.get("code") != plan.code]
+        plans.append(
+            {
+                "code": plan.code,
+                "name": plan.name.strip(),
+                "amount": plan.amount,
+                "holdings": plan.holdings,
+                "frequency": plan.frequency,
+                "next_date": plan.next_date.isoformat(),
+                "enabled": plan.enabled,
+            }
+        )
+        config["plans"] = plans
+        _write_config(config)
+    return {
         "code": plan.code,
         "name": plan.name.strip(),
         "amount": f"{plan.amount:.2f}",
@@ -67,17 +89,16 @@ def save_plan(plan: InvestmentPlan) -> dict:
         "next_date": plan.next_date.isoformat(),
         "enabled": "1" if plan.enabled else "0",
     }
-    plans = [item for item in _read_plans() if item.get("code") != plan.code]
-    plans.append(saved)
-    _write_plans(plans)
-    return saved
 
 
 @router.delete("/{code}")
 def delete_plan(code: str) -> dict:
-    plans = _read_plans()
-    remaining = [item for item in plans if item.get("code") != code]
-    if len(remaining) == len(plans):
-        raise HTTPException(status_code=404, detail="investment plan not found")
-    _write_plans(remaining)
+    with _write_lock:
+        config = _read_config()
+        plans = config.get("plans", [])
+        remaining = [p for p in plans if p.get("code") != code]
+        if len(remaining) == len(plans):
+            raise HTTPException(status_code=404, detail="investment plan not found")
+        config["plans"] = remaining
+        _write_config(config)
     return {"code": code}

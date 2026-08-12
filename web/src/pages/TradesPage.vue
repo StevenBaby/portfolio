@@ -77,6 +77,8 @@
         >日期范围</n-checkbox
       >
       <n-checkbox v-model:checked="hideAmount">隐藏信息</n-checkbox>
+      <n-checkbox v-model:checked="netOnly">净交易</n-checkbox>
+      <n-checkbox v-model:checked="invertOnly">反选</n-checkbox>
     </div>
     <div class="sub-tabs">
       <div
@@ -381,8 +383,11 @@ const sideOptions = [
 ];
 
 // ============ 筛选后的数据 ============
+const netOnly = persistedRef("trades_netOnly", false);
+const invertOnly = persistedRef("trades_invertOnly", false);
+
 const filteredTrades = computed(() => {
-  return props.trades.filter((t) => {
+  const result = props.trades.filter((t) => {
     if (selectedCode.value && t.code !== selectedCode.value) return false;
     if (selectedSide.value) {
       if (selectedSide.value === "reverse_repo" && !isReverseRepo(t.code))
@@ -427,6 +432,84 @@ const filteredTrades = computed(() => {
     }
     return true;
   });
+  if (!netOnly.value) {
+    return invertOnly.value ? [] : result;
+  }
+
+  // 净交易：分两轮配对
+  const nonRepo = result.filter((t) => !isReverseRepo(t.code));
+  const removed = new Set();
+
+  // 第一轮：日内 T+0 配对
+  // 按日期分组，同日买入均价 < 卖出均价且数量相等
+  const byDate = {};
+  for (const t of nonRepo) {
+    const d = t.datetime.split(" ")[0];
+    if (!byDate[d]) byDate[d] = {};
+    if (!byDate[d][t.code]) byDate[d][t.code] = { buys: [], sells: [] };
+    if (t.side === "买入") byDate[d][t.code].buys.push(t);
+    else if (t.side === "卖出") byDate[d][t.code].sells.push(t);
+  }
+  for (const dayMap of Object.values(byDate)) {
+    for (const { buys, sells } of Object.values(dayMap)) {
+      const buyQty = buys.reduce((s, b) => s + b.quantity, 0);
+      const sellQty = sells.reduce((s, s2) => s + s2.quantity, 0);
+      if (buyQty > 0 && buyQty === sellQty) {
+        const buyAvg = buys.reduce((s, b) => s + b.price * b.quantity, 0) / buyQty;
+        const sellAvg = sells.reduce((s, s2) => s + s2.price * s2.quantity, 0) / sellQty;
+        if (sellAvg > buyAvg) {
+          buys.forEach((b) => removed.add(b));
+          sells.forEach((s) => removed.add(s));
+        }
+      }
+    }
+  }
+
+  // 第二轮：全局配对，卖出价 > 买入价，数量相同，价差最小优先，重复直到无配对
+  let current = nonRepo.filter((t) => !removed.has(t));
+  while (true) {
+    const byCode = {};
+    for (const t of current) {
+      if (!byCode[t.code]) byCode[t.code] = { buys: [], sells: [] };
+      if (t.side === "买入") byCode[t.code].buys.push(t);
+      else if (t.side === "卖出") byCode[t.code].sells.push(t);
+    }
+    const removeSet = new Set();
+    for (const { buys, sells } of Object.values(byCode)) {
+      const usedBuys = new Set();
+      const usedSells = new Set();
+      for (const buy of buys) {
+        if (usedBuys.has(buy)) continue;
+        let bestSell = null;
+        let bestDiff = Infinity;
+        for (const sell of sells) {
+          if (usedSells.has(sell)) continue;
+          if (sell.price > buy.price && sell.quantity === buy.quantity) {
+            const diff = sell.price - buy.price;
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              bestSell = sell;
+            }
+          }
+        }
+        if (bestSell) {
+          usedBuys.add(buy);
+          usedSells.add(bestSell);
+          removeSet.add(buy);
+          removeSet.add(bestSell);
+        }
+      }
+    }
+    if (removeSet.size === 0) break;
+    removeSet.forEach((t) => removed.add(t));
+    current = current.filter((t) => !removeSet.has(t));
+  }
+
+  // 反选：显示被去掉的配对交易（补集）
+  if (invertOnly.value) {
+    return nonRepo.filter((t) => removed.has(t));
+  }
+  return nonRepo.filter((t) => !removed.has(t));
 });
 
 // ============ 交易汇总 ============
@@ -809,7 +892,12 @@ function calcPnl(tradesList) {
   return pnl;
 }
 
-const filteredPnl = computed(() => calcPnl(filteredTrades.value));
+const filteredPnl = computed(() => {
+  if (subTab.value === "summary") {
+    return tradeSummary.value.reduce((sum, item) => sum + (item.floatPnl || 0), 0);
+  }
+  return calcPnl(filteredTrades.value);
+});
 const totalPnl = computed(() => calcPnl(props.trades));
 const filteredPnlResult = computed(() =>
   pnlFormat(filteredPnl.value, hideAmount.value)

@@ -1,21 +1,16 @@
-"""Portfolio profile CSV API for holding names and colors."""
+"""Portfolio profile JSON API: holding names, colors and total cost."""
 
 from __future__ import annotations
 
-import csv
+import json
+import threading
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-PROFILE_FILE = Path(__file__).resolve().parents[1] / "trade" / "portfolio.csv"
-PROFILE_FIELDS = ("代码", "名称", "颜色")
-PROFILE_KEYS = ("code", "name", "color")
-
-import threading
-
+CONFIG_FILE = Path(__file__).resolve().parents[1] / "trade" / "portfolio.json"
 _write_lock = threading.Lock()
-router = APIRouter(prefix="/api/profile", tags=["profile"])
 
 
 class HoldingProfile(BaseModel):
@@ -24,51 +19,66 @@ class HoldingProfile(BaseModel):
     color: str = "#d03050"
 
 
-def _read_profiles() -> list[dict]:
-    if not PROFILE_FILE.is_file():
-        return []
-    with PROFILE_FILE.open("r", encoding="utf-8", newline="") as stream:
-        return [
-            dict(zip(PROFILE_KEYS, (row.get(field, "") for field in PROFILE_FIELDS)))
-            for row in csv.DictReader(stream)
-        ]
+def _read_config() -> dict:
+    if not CONFIG_FILE.is_file():
+        return {"holdings": {}, "plans": []}
+    with CONFIG_FILE.open("r", encoding="utf-8") as f:
+        return json.load(f)
 
 
-def _write_profiles(profiles: list[dict]) -> None:
-    PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with PROFILE_FILE.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=PROFILE_FIELDS)
-        writer.writeheader()
-        writer.writerows(
-            {field: p.get(key, "") for field, key in zip(PROFILE_FIELDS, PROFILE_KEYS)}
-            for p in profiles
-        )
+def _write_config(config: dict) -> None:
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with CONFIG_FILE.open("w", encoding="utf-8") as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+
+
+router = APIRouter(prefix="/api/profile", tags=["profile"])
 
 
 @router.get("")
 def list_profiles() -> list[dict]:
-    return _read_profiles()
+    config = _read_config()
+    holdings = config.get("holdings", {})
+    return [
+        {"code": k, "name": v.get("name", ""), "color": v.get("color", "#d03050")}
+        for k, v in holdings.items()
+    ]
 
 
 @router.post("")
 def save_profile(profile: HoldingProfile) -> dict:
-    saved = {
-        "code": profile.code,
-        "name": profile.name.strip(),
-        "color": profile.color,
-    }
     with _write_lock:
-        profiles = [item for item in _read_profiles() if item.get("code") != profile.code]
-        profiles.append(saved)
-        _write_profiles(profiles)
-    return saved
+        config = _read_config()
+        config.setdefault("holdings", {})[profile.code] = {
+            "name": profile.name.strip(),
+            "color": profile.color,
+        }
+        _write_config(config)
+    return {"code": profile.code, "name": profile.name.strip(), "color": profile.color}
+
+
+@router.get("/total_cost")
+def get_total_cost() -> dict:
+    config = _read_config()
+    return {"total_cost": config.get("total_cost", 0)}
+
+
+@router.post("/total_cost")
+def set_total_cost(body: dict) -> dict:
+    with _write_lock:
+        config = _read_config()
+        config["total_cost"] = float(body.get("total_cost", 0))
+        _write_config(config)
+    return {"total_cost": config["total_cost"]}
 
 
 @router.delete("/{code}")
 def delete_profile(code: str) -> dict:
-    profiles = _read_profiles()
-    remaining = [item for item in profiles if item.get("code") != code]
-    if len(remaining) == len(profiles):
-        raise HTTPException(status_code=404, detail="profile not found")
-    _write_profiles(remaining)
+    with _write_lock:
+        config = _read_config()
+        holdings = config.get("holdings", {})
+        if code not in holdings:
+            raise HTTPException(status_code=404, detail="profile not found")
+        del holdings[code]
+        _write_config(config)
     return {"code": code}

@@ -35,8 +35,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(plan_router)
 app.include_router(profile_router)
+app.include_router(plan_router)
 
 
 def _records(df: pd.DataFrame) -> list[dict]:
