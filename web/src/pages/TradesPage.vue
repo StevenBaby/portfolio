@@ -151,6 +151,7 @@
       </div>
       <v-chart
         :option="chartOption"
+        :update-options="{ notMerge: true }"
         autoresize
         style="height: calc(100% - 30px); min-height: 270px"
       />
@@ -172,6 +173,7 @@
       </div>
       <v-chart
         :option="lineChartOption"
+        :update-options="{ notMerge: true }"
         autoresize
         style="height: calc(100% - 30px); min-height: 270px"
       />
@@ -441,7 +443,7 @@ const filteredTrades = computed(() => {
   const removed = new Set();
 
   // 第一轮：日内 T+0 配对
-  // 按日期分组，同日买入均价 < 卖出均价且数量相等
+  // 按日期分组，同日同代码买入总价+双边手续费 < 卖出总价且数量相等
   const byDate = {};
   for (const t of nonRepo) {
     const d = t.datetime.split(" ")[0];
@@ -455,9 +457,10 @@ const filteredTrades = computed(() => {
       const buyQty = buys.reduce((s, b) => s + b.quantity, 0);
       const sellQty = sells.reduce((s, s2) => s + s2.quantity, 0);
       if (buyQty > 0 && buyQty === sellQty) {
-        const buyAvg = buys.reduce((s, b) => s + b.price * b.quantity, 0) / buyQty;
-        const sellAvg = sells.reduce((s, s2) => s + s2.price * s2.quantity, 0) / sellQty;
-        if (sellAvg > buyAvg) {
+        const buyTotal = buys.reduce((s, b) => s + b.amount + b.fee, 0);
+        const sellTotal = sells.reduce((s, s2) => s + s2.amount - s2.fee, 0);
+        const totalFees = buys.reduce((s, b) => s + b.fee, 0) + sells.reduce((s, s2) => s + s2.fee, 0);
+        if (buyTotal + totalFees < sellTotal) {
           buys.forEach((b) => removed.add(b));
           sells.forEach((s) => removed.add(s));
         }
@@ -465,7 +468,7 @@ const filteredTrades = computed(() => {
     }
   }
 
-  // 第二轮：全局配对，卖出价 > 买入价，数量相同，价差最小优先，重复直到无配对
+  // 第二轮：全局配对，买入总价+双边手续费 < 卖出总价，数量相同，价差最小优先，重复直到无配对
   let current = nonRepo.filter((t) => !removed.has(t));
   while (true) {
     const byCode = {};
@@ -484,11 +487,16 @@ const filteredTrades = computed(() => {
         let bestDiff = Infinity;
         for (const sell of sells) {
           if (usedSells.has(sell)) continue;
-          if (sell.price > buy.price && sell.quantity === buy.quantity) {
-            const diff = sell.price - buy.price;
-            if (diff < bestDiff) {
-              bestDiff = diff;
-              bestSell = sell;
+          if (sell.quantity === buy.quantity) {
+            const buyTotal = buy.amount + buy.fee;
+            const sellTotal = sell.amount - sell.fee;
+            const totalFees = buy.fee + sell.fee;
+            if (buyTotal + totalFees < sellTotal) {
+              const diff = sellTotal - buyTotal - totalFees;
+              if (diff < bestDiff) {
+                bestDiff = diff;
+                bestSell = sell;
+              }
             }
           }
         }
@@ -662,7 +670,7 @@ const chartOption = computed(() => {
     },
     yAxis: {
       type: "value",
-      axisLabel: { color: "#888" },
+      axisLabel: { color: "#888", formatter: () => hideAmount.value ? "***" : "" },
       axisLine: { lineStyle: { color: "#333" } },
       splitLine: { lineStyle: { color: "#222" } },
     },
@@ -795,7 +803,7 @@ const lineChartOption = computed(() => {
     },
     yAxis: {
       type: "value",
-      axisLabel: { color: "#888" },
+      axisLabel: { color: "#888", formatter: () => hideAmount.value ? "***" : "" },
       axisLine: { lineStyle: { color: "#333" } },
       splitLine: { lineStyle: { color: "#222" } },
     },
@@ -1003,6 +1011,20 @@ const columns = [
       ),
     sorter: (a, b) =>
       (props.quotes[a.code]?.price || 0) - (props.quotes[b.code]?.price || 0),
+  },
+  {
+    title: "浮动盈亏",
+    key: "floatPnl",
+    width: 100,
+    render: (row) => {
+      if (hideAmount.value) return "***";
+      const cur = props.quotes[row.code]?.price;
+      if (!cur) return "--";
+      const pnl = (cur - row.price) * row.quantity * (row.side === "买入" ? 1 : -1);
+      const cls = pnl >= 0 ? "amount-positive" : "amount-negative";
+      const sign = pnl >= 0 ? "+" : "";
+      return h("span", { class: cls }, sign + formatMoney(pnl));
+    },
   },
   {
     title: "成交金额",

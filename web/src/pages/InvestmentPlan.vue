@@ -40,7 +40,7 @@ import {
 
 import { holdingProfiles } from "../parse.js";
 
-const props = defineProps({ holdings: { type: Array, default: () => [] } });
+const props = defineProps({ holdings: { type: Array, default: () => [] }, hideAmount: { type: Boolean, default: false } });
 const emit = defineEmits(["plans-change"]);
 const API = import.meta.env.DEV ? "http://localhost:8090" : "";
 const plans = ref([]);
@@ -101,8 +101,9 @@ async function removePlan(code) {
   await loadPlans();
 }
 const columns = [
-  { title: "代码", key: "code", width: 80 },
+  { title: "代码", key: "code", width: 80, render: (row) => props.hideAmount ? "***" : row.code },
   { title: "名称", key: "name", minWidth: 120, render: (row) => {
+    if (props.hideAmount) return "***";
     const holding = props.holdings.find((item) => item.code === row.code);
     const name = holdingProfiles.value[row.code]?.name || row.name;
     const color = holdingProfiles.value[row.code]?.color || "#d03050";
@@ -111,8 +112,8 @@ const columns = [
       h("span", { class: "holding-name-color", style: { backgroundColor: color }, title: color }),
     ]);
   } },
-  { title: "定投持仓", key: "holdings", width: 100, render: (row) => Number(row.holdings || 0).toLocaleString() },
-  { title: "定投金额", key: "amount", width: 110, render: (row) => `¥${Number(row.amount).toFixed(2)}` },
+  { title: "定投持仓", key: "holdings", width: 100, render: (row) => props.hideAmount ? "***" : Number(row.holdings || 0).toLocaleString() },
+  { title: "定投金额", key: "amount", width: 110, render: (row) => props.hideAmount ? "***" : `¥${Number(row.amount).toFixed(2)}` },
   { title: "周期", key: "frequency", width: 75 },
   { title: "下次定投", key: "next_date", width: 120 },
   { title: "状态", key: "enabled", width: 85, render: (row) => h(NSwitch, { value: row.enabled === "1", size: "small", onUpdateValue: (value) => togglePlan(row, value) }) },

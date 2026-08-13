@@ -67,9 +67,9 @@
       <div class="chart-toolbar">
         <n-select v-model:value="pieMetric" :options="pieMetricOptions" size="small" style="width: 120px; margin-left: auto" />
       </div>
-      <v-chart :option="pieOption" autoresize style="height: calc(100% - 30px); min-height: 270px" />
+      <v-chart :option="pieOption" :update-options="{ notMerge: true }" autoresize style="height: calc(100% - 30px); min-height: 270px" />
     </div>
-    <InvestmentPlan v-show="subTab === 'plan'" :holdings="props.holdings" @plans-change="updatePlanCodes" />
+    <InvestmentPlan v-show="subTab === 'plan'" :holdings="props.holdings" :hide-amount="hideAmount" @plans-change="updatePlanCodes" />
   </div>
 </template>
 
