@@ -141,7 +141,7 @@
           <template v-for="(item,key) in data.commodities.spot" :key="key">
             <div v-if="item" class="probe-card">
               <div class="probe-name">{{ fmtName(item) }}</div>
-              <div class="probe-price">{{ fmtNum(item.price) }}</div>
+              <div class="probe-price">{{ fmtNum(item.price) }}<span v-if="item.cny_per_gram != null" class="probe-sub"> (¥{{ item.cny_per_gram }}/g)</span></div>
               <div class="probe-pct" :class="pctClass(item.pct)">{{ fmtPct(item.pct) }}</div>
             </div>
           </template>
@@ -153,7 +153,7 @@
           <template v-for="(item,key) in data.commodities.futures" :key="key">
             <div v-if="item" class="probe-card">
               <div class="probe-name">{{ fmtName(item) }}</div>
-              <div class="probe-price">{{ fmtNum(item.price) }}</div>
+              <div class="probe-price">{{ fmtNum(item.price) }}<span v-if="item.cny_per_gram != null" class="probe-sub"> (¥{{ item.cny_per_gram }}/g)</span></div>
               <div class="probe-pct" :class="pctClass(item.pct)">{{ fmtPct(item.pct) }}</div>
             </div>
           </template>
@@ -288,7 +288,7 @@ const fmtName = (item) => {
   const suffix = fmtDate(item.date, item.name);
   return suffix ? `${item.name}${suffix}` : item.name;
 };
-const fmtNum = (v) => (v != null ? Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 }) : "--");
+const fmtNum = (v) => (v != null ? Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : "--");
 const fmtYi = (v) => (v != null ? `${(v / 1e8).toFixed(2)}亿` : "--");
 const fmtWanYi = (v) => (v != null ? `${(v / 100).toFixed(2)}亿` : "--");
 const fmtPct = (v) => (v != null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "--");

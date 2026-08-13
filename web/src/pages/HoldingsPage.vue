@@ -342,19 +342,27 @@ const holdingColumns = computed(() => [
   {
     title: "平均成本",
     key: "avg_cost",
-    width: 90,
-    render: (row) =>
-      displayData(row.shares > 0 ? row.avg_cost : null, hideAmount.value, (v) =>
-        v.toFixed(4)
-      ),
+    width: 100,
+    render: (row) => {
+      if (hideAmount.value) return "***";
+      if (!row.shares || row.shares <= 0) return "--";
+      const val = row.avg_cost.toFixed(4);
+      const cny = row.code === "518880" ? ` ¥${(row.avg_cost / 0.00951).toFixed(2)}/g` : "";
+      return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
+    },
     sorter: (a, b) => a.avg_cost - b.avg_cost,
   },
   {
     title: "现价",
     key: "price",
-    width: 80,
-    render: (row) =>
-      displayData(row.price || null, hideAmount.value, (v) => v.toFixed(3)),
+    width: 100,
+    render: (row) => {
+      if (hideAmount.value) return "***";
+      if (!row.price) return "--";
+      const val = row.price.toFixed(3);
+      const cny = row.code === "518880" ? ` ¥${(row.price / 0.00951).toFixed(2)}/g` : "";
+      return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
+    },
     sorter: (a, b) => a.price - b.price,
   },
   {

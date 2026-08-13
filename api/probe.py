@@ -476,6 +476,37 @@ COMMODITY_QT = {
     "CLF": "fuCL",
 }
 
+# 上海金（东财 secid）
+SHANGHAI_GOLD_SECID = "118.AU9999"
+# 黄金ETF
+GOLD_ETF_CODE = "518880"
+# 盎司转克
+OZ_TO_G = 31.1035
+
+
+def _fetch_em_secid(secid: str) -> dict | None:
+    """从东财 push2 获取单个 secid 行情，价格按 f59 小数位数转换"""
+    url = f"http://push2.eastmoney.com/api/qt/stock/get?secid={secid}&fields=f57,f58,f43,f170,f44,f45,f59"
+    try:
+        import subprocess
+        r = subprocess.run(
+            ['curl', '-fsS', '--retry', '3', '--http1.1', '-A', 'Mozilla/5.0', url],
+            capture_output=True, text=True, timeout=10,
+        )
+        d = json.loads(r.stdout).get('data')
+        if d:
+            decimals = int(d.get('f59') or 2)
+            factor = 10 ** decimals
+            return {
+                'name': d.get('f58', ''),
+                'price': _float(d.get('f43')) / factor,
+                'prev_close': _float(d.get('f44')) / factor,
+                'pct': _float(d.get('f170')) / 100,
+            }
+    except Exception:
+        pass
+    return None
+
 
 def get_commodities(force_refresh: bool = False) -> dict:
     cached = None if force_refresh else _cached_get("commodity")
@@ -501,6 +532,32 @@ def get_commodities(force_refresh: bool = False) -> dict:
         item = qt_data.get(code)
         if item and item.get("price") and item.get("name") not in ("0", "", None):
             result["futures"][name] = item
+
+    # 获取离岸人民币汇率
+    cnh_data = _fetch_sina("fx_susdcnh")
+    usdcnh = cnh_data.get("fx_susdcnh", {}).get("price") if cnh_data else None
+
+    # 上海金
+    shgold = _fetch_em_secid(SHANGHAI_GOLD_SECID)
+    if shgold:
+        shgold["name"] = "AU9999"
+        result["spot"]["SHGOLD"] = shgold
+
+    # 黄金ETF（净值≈金价/100，所以折算 = 价格×100）
+    gold_etf = _fetch_em_secid(f"1.{GOLD_ETF_CODE}")
+    if gold_etf:
+        gold_etf["name"] = "黄金ETF"
+        result["spot"]["GOLDETF"] = gold_etf
+
+    # 人民币折算（美元/盎司 → 人民币/克）
+    if usdcnh:
+        for key in ("XAU", "GC"):
+            item = result["spot"].get(key) or result["futures"].get(key)
+            if item and item.get("price"):
+                item["cny_per_gram"] = round(item["price"] / OZ_TO_G * usdcnh, 2)
+        # 黄金ETF 折算：每份≈0.00951克黄金
+        if result["spot"].get("GOLDETF"):
+            result["spot"]["GOLDETF"]["cny_per_gram"] = round(result["spot"]["GOLDETF"]["price"] / 0.00951, 2)
 
     _cache_set("commodity", result)
     return result

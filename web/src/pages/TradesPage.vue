@@ -610,8 +610,20 @@ const summaryColumns = [
     ]);
   } },
   { title: "持仓", key: "shares", width: 90, render: (row) => displayData(row.shares > 0 ? row.shares : null, hideAmount.value, (v) => v.toLocaleString(), "***") },
-  { title: "平均成本", key: "avg_cost", width: 95, render: (row) => displayData(row.shares > 0 ? row.avg_cost : null, hideAmount.value, (v) => v.toFixed(4), "***") },
-  { title: "当日价", key: "price", width: 80, render: (row) => displayData(row.price || null, hideAmount.value, (v) => v.toFixed(3), "***") },
+  { title: "平均成本", key: "avg_cost", width: 100, render: (row) => {
+    if (hideAmount.value) return "***";
+    if (!row.shares || row.shares <= 0) return "--";
+    const val = row.avg_cost.toFixed(4);
+    const cny = row.code === "518880" ? ` ¥${(row.avg_cost / 0.00951).toFixed(2)}/g` : "";
+    return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
+  } },
+  { title: "当日价", key: "price", width: 100, render: (row) => {
+    if (hideAmount.value) return "***";
+    if (!row.price) return "--";
+    const val = row.price.toFixed(3);
+    const cny = row.code === "518880" ? ` ¥${(row.price / 0.00951).toFixed(2)}/g` : "";
+    return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
+  } },
   { title: "总成本", key: "total_cost", width: 110, render: (row) => displayData(row.total_cost, hideAmount.value, (v) => `¥${v.toFixed(2)}`, "***") },
   { title: "市值", key: "marketValue", width: 110, render: (row) => displayData(row.price && row.shares > 0 ? row.marketValue : null, hideAmount.value, (v) => `¥${v.toFixed(2)}`, "***") },
   { title: "浮动盈亏", key: "floatPnl", width: 110, render: (row) => pnlRender(row.floatPnl) },
@@ -996,19 +1008,27 @@ const columns = [
   {
     title: "均价",
     key: "price",
-    width: 80,
-    render: (row) =>
-      displayData(row.price, hideAmount.value, (v) => v.toFixed(3)),
+    width: 100,
+    render: (row) => {
+      if (hideAmount.value) return "***";
+      const val = row.price.toFixed(3);
+      const cny = row.code === "518880" ? ` ¥${(row.price / 0.00951).toFixed(2)}/g` : "";
+      return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
+    },
     sorter: (a, b) => a.price - b.price,
   },
   {
     title: "现价",
     key: "currentPrice",
-    width: 80,
-    render: (row) =>
-      displayData(props.quotes[row.code]?.price, hideAmount.value, (v) =>
-        v.toFixed(3)
-      ),
+    width: 100,
+    render: (row) => {
+      if (hideAmount.value) return "***";
+      const cur = props.quotes[row.code]?.price;
+      if (!cur) return "--";
+      const val = cur.toFixed(3);
+      const cny = row.code === "518880" ? ` ¥${(cur / 0.00951).toFixed(2)}/g` : "";
+      return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
+    },
     sorter: (a, b) =>
       (props.quotes[a.code]?.price || 0) - (props.quotes[b.code]?.price || 0),
   },

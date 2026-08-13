@@ -404,6 +404,8 @@ body {
 .probe-name { font-size: 12px; color: #888; margin-bottom: 4px; }
 .probe-price { font-size: 16px; font-weight: 600; color: #ddd; margin-bottom: 2px; }
 .probe-pct { font-size: 13px; }
+.probe-sub { font-size: 13px; color: #888; }
+.holding-sub { font-size: 11px; color: #888; }
 .probe-date { font-size: 11px; color: #666; margin-top: 2px; }
 .probe-empty { padding: 20px; color: #666; text-align: center; }
 .brief-card { padding: 12px 4px; }
