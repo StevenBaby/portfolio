@@ -53,6 +53,19 @@
       </div>
     </template>
 
+    <template v-if="data?.us?.vix && !loading">
+      <div class="probe-section">
+        <div class="probe-section-title">恐慌指数</div>
+        <div class="probe-cards">
+          <div class="probe-card">
+            <div class="probe-name">{{ fmtName(data.us.vix) }}</div>
+            <div class="probe-price">{{ fmtNum(data.us.vix.price) }}</div>
+            <div class="probe-pct" :class="pctClass(data.us.vix.pct)">{{ fmtPct(data.us.vix.pct) }}</div>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <template v-if="data?.margin?.data && !loading">
       <div class="probe-section">
         <div class="probe-section-title">融资融券</div>
@@ -255,7 +268,7 @@ const isChinaTrading = (() => {
 })();
 
 const isUsMarketItem = (name) => {
-  const usKeywords = ['道琼斯','纳斯达克','标普','半导体ETF','TQQQ','英伟达','苹果','微软','谷歌','亚马逊','特斯拉'];
+  const usKeywords = ['道琼斯','纳斯达克','标普','半导体ETF','TQQQ','英伟达','苹果','微软','谷歌','亚马逊','特斯拉','波动率'];
   return usKeywords.some(k => name?.includes(k));
 };
 

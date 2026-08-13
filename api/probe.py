@@ -347,6 +347,33 @@ US_TECH_SINA = {
     "TSLA": "gb_tsla",
 }
 
+US_VIX_QT = {"VIX": "usVIX"}
+
+
+def _fetch_yahoo_vix() -> dict | None:
+    """从雅虎财经获取 VIX 恐慌指数"""
+    url = "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=1d"
+    try:
+        import subprocess
+        r = subprocess.run(
+            ['curl', '-fsS', '--retry', '3', '--http1.1', '-A', 'Mozilla/5.0', url],
+            capture_output=True, text=True, timeout=10,
+        )
+        d = json.loads(r.stdout)
+        meta = d["chart"]["result"][0]["meta"]
+        price = meta.get("regularMarketPrice")
+        prev = meta.get("chartPreviousClose") or meta.get("previousClose")
+        pct = round((price - prev) / prev * 100, 2) if price and prev else None
+        return {
+            'name': '标普500波动率指数',
+            'price': price,
+            'prev_close': prev,
+            'pct': pct,
+            'date': _now_cst().strftime('%Y-%m-%d'),
+        }
+    except Exception:
+        return None
+
 
 def get_us_market(force_refresh: bool = False) -> dict:
     cached = None if force_refresh else _cached_get("us")
@@ -378,6 +405,10 @@ def get_us_market(force_refresh: bool = False) -> dict:
     for name, code in US_TECH_SINA.items():
         if code in sina_data:
             result["tech"][name] = sina_data[code]
+
+    vix_data = _fetch_yahoo_vix()
+    if vix_data:
+        result["vix"] = vix_data
 
     _cache_set("us", result)
     return result
