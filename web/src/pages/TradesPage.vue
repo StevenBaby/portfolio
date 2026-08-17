@@ -79,6 +79,7 @@
       <n-checkbox v-model:checked="hideAmount">隐藏信息</n-checkbox>
       <n-checkbox v-model:checked="netOnly">净交易</n-checkbox>
       <n-checkbox v-model:checked="invertOnly">反选</n-checkbox>
+      <n-checkbox v-model:checked="showCleared">显示已清仓</n-checkbox>
     </div>
     <div class="sub-tabs">
       <div
@@ -268,6 +269,7 @@ const props = defineProps({
 });
 
 const selectedCode = persistedRef("trades_selectedCode", null);
+const showCleared = persistedRef("trades_showCleared", false);
 const selectedSide = persistedRef("trades_selectedSide", null);
 const searchText = persistedRef("trades_searchText", "");
 const dateRange = ref(null);
@@ -367,16 +369,27 @@ const summaryPagination = reactive({
 });
 
 // ============ 筛选选项 ============
+const clearedCodes = computed(() => new Set(
+  props.holdings.filter((holding) => holding.shares === 0).map((holding) => holding.code)
+));
+
 const codeOptions = computed(() => {
   const codes = new Map();
-  props.trades.forEach((t) => {
-    if (!codes.has(t.code)) codes.set(t.code, `${t.code} ${t.name}`);
+  props.trades.forEach((trade) => {
+    if (!showCleared.value && clearedCodes.value.has(trade.code)) return;
+    if (!codes.has(trade.code)) codes.set(trade.code, `${trade.code} ${trade.name}`);
   });
   return Array.from(codes.entries()).map(([value, label]) => ({
     value,
     label: displayData(label, hideAmount.value, null, "***"),
   }));
 });
+
+watch([showCleared, () => props.holdings], () => {
+  if (selectedCode.value && !codeOptions.value.some((option) => option.value === selectedCode.value)) {
+    selectedCode.value = null;
+  }
+}, { deep: true });
 
 const sideOptions = [
   { value: "buy", label: "买入" },
@@ -390,6 +403,7 @@ const invertOnly = persistedRef("trades_invertOnly", false);
 
 const filteredTrades = computed(() => {
   const result = props.trades.filter((t) => {
+    if (!showCleared.value && clearedCodes.value.has(t.code)) return false;
     if (selectedCode.value && t.code !== selectedCode.value) return false;
     if (selectedSide.value) {
       if (selectedSide.value === "reverse_repo" && !isReverseRepo(t.code))
@@ -595,6 +609,7 @@ const tradeSummary = computed(() => {
         cleared: group.shares === 0,
       };
     })
+    .filter((group) => showCleared.value || !group.cleared)
     .sort(summaryCodeSort);
 });
 
