@@ -373,6 +373,37 @@ const clearedCodes = computed(() => new Set(
   props.holdings.filter((holding) => holding.shares === 0).map((holding) => holding.code)
 ));
 
+// 净交易前置处理：清仓亏损不切断计算，累计到后续清仓转为盈利时整体删除。
+const profitableClearedTrades = computed(() => {
+  const removed = new Set();
+  const codes = new Set(props.trades.map((trade) => trade.code));
+  for (const code of codes) {
+    if (isReverseRepo(code)) continue;
+    const accumulated = [];
+    let shares = 0;
+    let accumulatedCost = 0;
+    const codeTrades = props.trades
+      .filter((trade) => trade.code === code)
+      .sort((a, b) => a.datetime.localeCompare(b.datetime));
+    for (const trade of codeTrades) {
+      accumulated.push(trade);
+      if (trade.side === "买入") {
+        shares += trade.quantity;
+        accumulatedCost += trade.amount + trade.fee;
+      } else {
+        shares -= trade.quantity;
+        accumulatedCost -= trade.amount - trade.fee;
+      }
+      if (shares === 0 && accumulatedCost < 0) {
+        accumulated.forEach((item) => removed.add(item));
+        accumulated.length = 0;
+        accumulatedCost = 0;
+      }
+    }
+  }
+  return removed;
+});
+
 const codeOptions = computed(() => {
   const codes = new Map();
   props.trades.forEach((trade) => {
@@ -452,8 +483,11 @@ const filteredTrades = computed(() => {
     return invertOnly.value ? [] : result;
   }
 
+  const netBase = result.filter((trade) => !profitableClearedTrades.value.has(trade));
+  const preRemoved = result.filter((trade) => profitableClearedTrades.value.has(trade));
+
   // 净交易：分两轮配对
-  const nonRepo = result.filter((t) => !isReverseRepo(t.code));
+  const nonRepo = netBase.filter((t) => !isReverseRepo(t.code));
   const removed = new Set();
 
   // 第一轮：日内 T+0 配对
@@ -527,9 +561,9 @@ const filteredTrades = computed(() => {
     current = current.filter((t) => !removeSet.has(t));
   }
 
-  // 反选：显示被去掉的配对交易（补集）
+  // 反选：显示前置阶段和两轮配对移除的交易（补集）
   if (invertOnly.value) {
-    return nonRepo.filter((t) => removed.has(t));
+    return [...preRemoved, ...nonRepo.filter((t) => removed.has(t))];
   }
   return nonRepo.filter((t) => !removed.has(t));
 });
