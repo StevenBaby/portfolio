@@ -96,6 +96,27 @@ body {
   padding-top: 8px;
 }
 
+.property-summary-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.property-chart-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.property-chart {
+  display: block;
+  width: 100%;
+  height: calc(100% - 30px);
+  min-height: 270px;
+}
+
 .chart-toolbar {
   display: flex;
   gap: 8px;

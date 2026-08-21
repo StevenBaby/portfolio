@@ -19,6 +19,11 @@ class HoldingProfile(BaseModel):
     color: str = "#d03050"
 
 
+class PropertyProfile(BaseModel):
+    asset: str = Field(min_length=1, max_length=64)
+    color: str = "#d03050"
+
+
 def _read_config() -> dict:
     if not CONFIG_FILE.is_file():
         return {"holdings": {}, "plans": []}
@@ -82,3 +87,21 @@ def delete_profile(code: str) -> dict:
         del holdings[code]
         _write_config(config)
     return {"code": code}
+
+
+@router.get("/property")
+def list_property_profiles() -> list[dict]:
+    config = _read_config()
+    return [
+        {"asset": key, "color": value.get("color", "#d03050")}
+        for key, value in config.get("properties", {}).items()
+    ]
+
+
+@router.post("/property")
+def save_property_profile(profile: PropertyProfile) -> dict:
+    with _write_lock:
+        config = _read_config()
+        config.setdefault("properties", {})[profile.asset] = {"color": profile.color}
+        _write_config(config)
+    return {"asset": profile.asset, "color": profile.color}

@@ -16,6 +16,7 @@ from api.amarket import (
 from api.galaxy import REPO_CODES, compute_holdings, load_trades
 from api.plan import router as plan_router
 from api.profile import router as profile_router
+from api.property import router as property_router
 from api.probe import (
     get_all_probes,
     get_cn_indices,
@@ -37,6 +38,7 @@ app.add_middleware(
 )
 app.include_router(profile_router)
 app.include_router(plan_router)
+app.include_router(property_router)
 
 
 def _records(df: pd.DataFrame) -> list[dict]:

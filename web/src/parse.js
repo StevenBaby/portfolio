@@ -43,6 +43,7 @@ export function persistedRef(key, defaultValue) {
 }
 
 export const holdingProfiles = ref({});
+export const propertyProfiles = ref({});
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8090" : "";
 
@@ -72,6 +73,34 @@ export function saveHoldingProfile(code, name, color) {
       });
     } catch (e) {
       console.error("保存持仓配置失败:", e);
+    }
+  }, 500);
+}
+
+export async function loadPropertyProfiles() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/profile/property`);
+    const data = await resp.json();
+    propertyProfiles.value = Object.fromEntries(
+      data.map((item) => [item.asset, { color: item.color || "#d03050" }])
+    );
+  } catch (e) {
+    console.error("加载资产配置失败:", e);
+  }
+}
+
+const _propertySaveTimers = {};
+export function savePropertyProfile(asset, color) {
+  if (_propertySaveTimers[asset]) clearTimeout(_propertySaveTimers[asset]);
+  _propertySaveTimers[asset] = setTimeout(async () => {
+    try {
+      await fetch(`${API_BASE}/api/profile/property`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ asset, color: color || "#d03050" }),
+      });
+    } catch (e) {
+      console.error("保存资产配置失败:", e);
     }
   }, 500);
 }
