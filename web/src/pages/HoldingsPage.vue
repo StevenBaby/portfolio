@@ -92,6 +92,7 @@ import {
   saveHoldingProfile,
   loadTotalCost,
   saveTotalCost,
+  goldPerShare,
 } from "../parse.js";
 
 use([CanvasRenderer, PieChart, LegendComponent, TooltipComponent]);
@@ -347,7 +348,7 @@ const holdingColumns = computed(() => [
       if (hideAmount.value) return "***";
       if (!row.shares || row.shares <= 0) return "--";
       const val = row.avg_cost.toFixed(4);
-      const cny = row.code === "518880" ? ` ¥${(row.avg_cost / 0.00951).toFixed(2)}/g` : "";
+      const cny = row.code === "518880" ? ` ¥${(row.avg_cost / goldPerShare.value).toFixed(2)}/g` : "";
       return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
     },
     sorter: (a, b) => a.avg_cost - b.avg_cost,
@@ -360,7 +361,7 @@ const holdingColumns = computed(() => [
       if (hideAmount.value) return "***";
       if (!row.price) return "--";
       const val = row.price.toFixed(3);
-      const cny = row.code === "518880" ? ` ¥${(row.price / 0.00951).toFixed(2)}/g` : "";
+      const cny = row.code === "518880" ? ` ¥${(row.price / goldPerShare.value).toFixed(2)}/g` : "";
       return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
     },
     sorter: (a, b) => a.price - b.price,

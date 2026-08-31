@@ -154,7 +154,7 @@
           <template v-for="(item,key) in data.commodities.spot" :key="key">
             <div v-if="item" class="probe-card">
               <div class="probe-name">{{ fmtName(item) }}</div>
-              <div class="probe-price">{{ fmtNum(item.price) }}<span v-if="item.cny_per_gram != null" class="probe-sub"> (¥{{ item.cny_per_gram }}/g)</span></div>
+              <div class="probe-price">{{ fmtNum(item.price) }}<span v-if="commodityCnyPerGram(item, key) != null" class="probe-sub"> (¥{{ commodityCnyPerGram(item, key) }}/g)</span></div>
               <div class="probe-pct" :class="pctClass(item.pct)">{{ fmtPct(item.pct) }}</div>
             </div>
           </template>
@@ -166,7 +166,7 @@
           <template v-for="(item,key) in data.commodities.futures" :key="key">
             <div v-if="item" class="probe-card">
               <div class="probe-name">{{ fmtName(item) }}</div>
-              <div class="probe-price">{{ fmtNum(item.price) }}<span v-if="item.cny_per_gram != null" class="probe-sub"> (¥{{ item.cny_per_gram }}/g)</span></div>
+              <div class="probe-price">{{ fmtNum(item.price) }}<span v-if="commodityCnyPerGram(item, key) != null" class="probe-sub"> (¥{{ commodityCnyPerGram(item, key) }}/g)</span></div>
               <div class="probe-pct" :class="pctClass(item.pct)">{{ fmtPct(item.pct) }}</div>
             </div>
           </template>
@@ -216,7 +216,7 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
-import { persistedRef } from "../parse.js";
+import { persistedRef, goldPerShare } from "../parse.js";
 
 const API = import.meta.env.DEV ? "http://localhost:8090" : "";
 const subTab = persistedRef("market_subTab", "probe");
@@ -306,6 +306,12 @@ const fmtYi = (v) => (v != null ? `${(v / 1e8).toFixed(2)}亿` : "--");
 const fmtWanYi = (v) => (v != null ? `${(v / 100).toFixed(2)}亿` : "--");
 const fmtPct = (v) => (v != null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "--");
 const pctClass = (v) => (v != null ? (v >= 0 ? "amount-positive" : "amount-negative") : "");
+const commodityCnyPerGram = (item, key) => {
+  if (key === "GOLDETF" && item?.price && goldPerShare.value > 0) {
+    return (item.price / goldPerShare.value).toFixed(2);
+  }
+  return item?.cny_per_gram;
+};
 
 const flowData = ref(null);
 const flowLoading = ref(false);

@@ -211,6 +211,7 @@ import {
   persistedRef,
   isReverseRepo,
   holdingProfiles,
+  goldPerShare,
 } from "../parse.js";
 
 use([
@@ -663,14 +664,14 @@ const summaryColumns = [
     if (hideAmount.value) return "***";
     if (!row.shares || row.shares <= 0) return "--";
     const val = row.avg_cost.toFixed(4);
-    const cny = row.code === "518880" ? ` ¥${(row.avg_cost / 0.00951).toFixed(2)}/g` : "";
+    const cny = row.code === "518880" ? ` ¥${(row.avg_cost / goldPerShare.value).toFixed(2)}/g` : "";
     return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
   } },
   { title: "当日价", key: "price", width: 100, render: (row) => {
     if (hideAmount.value) return "***";
     if (!row.price) return "--";
     const val = row.price.toFixed(3);
-    const cny = row.code === "518880" ? ` ¥${(row.price / 0.00951).toFixed(2)}/g` : "";
+    const cny = row.code === "518880" ? ` ¥${(row.price / goldPerShare.value).toFixed(2)}/g` : "";
     return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
   } },
   { title: "总成本", key: "total_cost", width: 110, render: (row) => displayData(row.total_cost, hideAmount.value, (v) => `¥${v.toFixed(2)}`, "***") },
@@ -1062,7 +1063,7 @@ const columns = [
     render: (row) => {
       if (hideAmount.value) return "***";
       const val = row.price.toFixed(3);
-      const cny = row.code === "518880" ? ` ¥${(row.price / 0.00951).toFixed(2)}/g` : "";
+      const cny = row.code === "518880" ? ` ¥${(row.price / goldPerShare.value).toFixed(2)}/g` : "";
       return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
     },
     sorter: (a, b) => a.price - b.price,
@@ -1076,7 +1077,7 @@ const columns = [
       const cur = props.quotes[row.code]?.price;
       if (!cur) return "--";
       const val = cur.toFixed(3);
-      const cny = row.code === "518880" ? ` ¥${(cur / 0.00951).toFixed(2)}/g` : "";
+      const cny = row.code === "518880" ? ` ¥${(cur / goldPerShare.value).toFixed(2)}/g` : "";
       return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
     },
     sorter: (a, b) =>
