@@ -154,6 +154,7 @@
         :option="chartOption"
         :update-options="{ notMerge: true }"
         autoresize
+        @ready="activateDataZoomSelect"
         style="height: calc(100% - 30px); min-height: 270px"
       />
     </div>
@@ -176,6 +177,7 @@
         :option="lineChartOption"
         :update-options="{ notMerge: true }"
         autoresize
+        @ready="activateDataZoomSelect"
         style="height: calc(100% - 30px); min-height: 270px"
       />
     </div>
@@ -201,6 +203,7 @@ import {
   LegendComponent,
   TooltipComponent,
   DataZoomComponent,
+  ToolboxComponent,
 } from "echarts/components";
 import {
   formatDate,
@@ -223,6 +226,7 @@ use([
   LegendComponent,
   TooltipComponent,
   DataZoomComponent,
+  ToolboxComponent,
 ]);
 
 const API = import.meta.env.DEV ? "http://localhost:8090" : "";
@@ -237,6 +241,16 @@ const metricOptions = [
   { value: "daily_pnl", label: "当日盈亏" },
   { value: "cumulative_pnl", label: "累计盈亏" },
 ];
+
+function activateDataZoomSelect(chart) {
+  requestAnimationFrame(() => {
+    chart.dispatchAction({
+      type: "takeGlobalCursor",
+      key: "dataZoomSelect",
+      dataZoomSelectActive: true,
+    });
+  });
+}
 
 function selectAllLegend() {
   const { series } = aggregateByDate(
@@ -864,6 +878,7 @@ const chartOption = computed(() => {
       { type: "inside", xAxisIndex: 0 },
       { type: "slider", xAxisIndex: 0, bottom: 35, height: 20 },
     ],
+    toolbox: { show: false, feature: { dataZoom: { yAxisIndex: "none" } } },
     grid: { left: 20, right: 20, top: 10, bottom: 80 },
     xAxis: {
       type: "category",
@@ -1017,6 +1032,7 @@ const lineChartOption = computed(() => {
       { type: "inside", xAxisIndex: 0 },
       { type: "slider", xAxisIndex: 0, bottom: 35, height: 20 },
     ],
+    toolbox: { show: false, feature: { dataZoom: { yAxisIndex: "none" } } },
     grid: { left: 20, right: 20, top: 10, bottom: 80 },
     xAxis: {
       type: "category",

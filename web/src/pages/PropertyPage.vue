@@ -174,6 +174,7 @@
         :option="barOption"
         :update-options="{ notMerge: true }"
         autoresize
+        @ready="activateDataZoomSelect"
         class="property-chart"
       />
     </div>
@@ -197,6 +198,7 @@
         :option="lineOption"
         :update-options="{ notMerge: true }"
         autoresize
+        @ready="activateDataZoomSelect"
         class="property-chart"
       />
     </div>
@@ -223,6 +225,7 @@ import {
   LegendComponent,
   TooltipComponent,
   DataZoomComponent,
+  ToolboxComponent,
 } from "echarts/components";
 import {
   displayData,
@@ -241,6 +244,7 @@ use([
   LegendComponent,
   TooltipComponent,
   DataZoomComponent,
+  ToolboxComponent,
 ]);
 
 const API = import.meta.env.DEV ? "http://localhost:8090" : "";
@@ -256,6 +260,16 @@ const chartMetricOptions = [
   { value: "amount", label: "金额" },
   { value: "delta", label: "增量" },
 ];
+
+function activateDataZoomSelect(chart) {
+  requestAnimationFrame(() => {
+    chart.dispatchAction({
+      type: "takeGlobalCursor",
+      key: "dataZoomSelect",
+      dataZoomSelectActive: true,
+    });
+  });
+}
 const money = (value) =>
   Number(value || 0).toLocaleString("zh-CN", {
     minimumFractionDigits: 2,
@@ -608,6 +622,7 @@ const barOption = computed(() => ({
     { type: "inside", xAxisIndex: 0 },
     { type: "slider", xAxisIndex: 0, bottom: 35, height: 20 },
   ],
+  toolbox: { show: false, feature: { dataZoom: { yAxisIndex: "none" } } },
   xAxis: {
     type: "category",
     data: chartDates.value,
@@ -680,6 +695,7 @@ const lineOption = computed(() => ({
     { type: "inside", xAxisIndex: 0 },
     { type: "slider", xAxisIndex: 0, bottom: 35, height: 20 },
   ],
+  toolbox: { show: false, feature: { dataZoom: { yAxisIndex: "none" } } },
   tooltip: {
     trigger: "axis",
     formatter: (params) =>
