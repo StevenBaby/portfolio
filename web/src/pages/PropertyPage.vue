@@ -337,13 +337,14 @@ const editingDate = ref("");
 const editingValues = ref({});
 const addingAsset = ref("");
 const showPensionBeforeEdit = ref(true);
+const propertyPageInitialized = ref(false);
 watch(
   editPropertyInfo,
   (editing) => {
     if (editing) {
       showPensionBeforeEdit.value = showPension.value;
-      showPension.value = true;
-    } else if (!editingSnapshot.value) {
+      if (propertyPageInitialized.value) showPension.value = true;
+    } else if (propertyPageInitialized.value && !editingSnapshot.value) {
       showPension.value = showPensionBeforeEdit.value;
     }
   },
@@ -593,23 +594,24 @@ function axisValue(value) {
   });
 }
 
+function formatAssetTooltip(params) {
+  if (!params?.length) return "";
+  const visibleParams = params.filter((param) => param.value !== 0 && param.value != null);
+  const total = params.reduce((sum, param) => sum + Number(param.value || 0), 0);
+  const lines = visibleParams.map(
+    (param) => `${param.marker}${hideAmount.value ? "***" : param.seriesName}: ${axisValue(param.value)}`,
+  );
+  lines.push(`合计: ${hideAmount.value ? "***" : axisValue(total)}`);
+  return `${params[0].axisValue}<br/>${lines.join("<br/>")}`;
+}
+
 const barOption = computed(() => ({
   backgroundColor: "transparent",
   grid: { left: 20, right: 20, top: 10, bottom: 80 },
   tooltip: {
     trigger: "axis",
     axisPointer: { type: "shadow" },
-    formatter: (params) =>
-      params?.length
-        ? `${params[0].axisValue}<br/>${params
-            .map(
-              (p) =>
-                `${p.marker}${
-                  hideAmount.value ? "***" : p.seriesName
-                }: ${axisValue(p.value)}`,
-            )
-            .join("<br/>")}`
-        : "",
+    formatter: formatAssetTooltip,
   },
   legend: {
     type: "scroll",
@@ -698,18 +700,7 @@ const lineOption = computed(() => ({
   toolbox: { show: false, feature: { dataZoom: { yAxisIndex: "none" } } },
   tooltip: {
     trigger: "axis",
-    formatter: (params) =>
-      params?.length
-        ? `${params[0].axisValue}<br/>${params
-            .filter((p) => p.value !== 0)
-            .map(
-              (p) =>
-                `${p.marker}${
-                  hideAmount.value ? "***" : p.seriesName
-                }: ${axisValue(p.value)}`,
-            )
-            .join("<br/>")}`
-        : "",
+    formatter: formatAssetTooltip,
   },
   xAxis: {
     type: "category",
@@ -764,6 +755,7 @@ onMounted(async () => {
     const data = await response.json();
     assets.value = data.assets || [];
     rows.value = data.rows || [];
+    propertyPageInitialized.value = true;
   } catch (error) {
     console.error("加载资产数据失败:", error);
   }
