@@ -433,56 +433,52 @@ const sideOptions = [
 const netOnly = persistedRef("trades_netOnly", false);
 const invertOnly = persistedRef("trades_invertOnly", false);
 
-const filteredTrades = computed(() => {
-  const result = props.trades.filter((t) => {
-    if (!showCleared.value && clearedCodes.value.has(t.code)) return false;
-    if (selectedCode.value && t.code !== selectedCode.value) return false;
-    if (selectedSide.value) {
-      if (selectedSide.value === "reverse_repo" && !isReverseRepo(t.code))
-        return false;
-      if (selectedSide.value === "buy" && t.side !== "买入") return false;
-      if (selectedSide.value === "sell" && t.side !== "卖出") return false;
-    }
-    if (searchText.value) {
-      const q = searchText.value.toLowerCase();
-      if (!t.code.includes(q) && !t.name.toLowerCase().includes(q))
-        return false;
-    }
-    if (isDateRange.value && dateRange.value) {
-      const [start, end] = dateRange.value;
-      if (!start || !end) return true;
-      const dateStr = t.datetime.split(" ")[0];
-      const d = new Date(
-        parseInt(dateStr.slice(0, 4)),
-        parseInt(dateStr.slice(4, 6)) - 1,
-        parseInt(dateStr.slice(6, 8))
-      );
-      const tradeTime = d.getTime();
-      if (tradeTime < start) return false;
-      if (tradeTime > end) return false;
-    }
-    if (!isDateRange.value && dateSingle.value) {
-      const dateStr = t.datetime.split(" ")[0];
-      const d = new Date(
-        parseInt(dateStr.slice(0, 4)),
-        parseInt(dateStr.slice(4, 6)) - 1,
-        parseInt(dateStr.slice(6, 8))
-      );
-      const tradeDate = `${dateStr.slice(0, 4)}-${dateStr.slice(
-        4,
-        6
-      )}-${dateStr.slice(6, 8)}`;
-      const selectedDate = new Date(dateSingle.value);
-      const selStr = `${selectedDate.getFullYear()}-${String(
-        selectedDate.getMonth() + 1
-      ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
-      if (tradeDate !== selStr) return false;
-    }
-    return true;
-  });
-  if (!netOnly.value) {
-    return invertOnly.value ? [] : result;
+function tradeDateMatches(trade) {
+  const date = formatDate(trade.datetime.split(" ")[0]);
+  if (isDateRange.value && dateRange.value?.[0] && dateRange.value?.[1]) {
+    const [start, end] = dateRange.value;
+    const time = new Date(`${date}T00:00:00`).getTime();
+    return time >= start && time <= end;
   }
+  if (!isDateRange.value && dateSingle.value) {
+    return date === formatDate(new Date(dateSingle.value).toISOString().slice(0, 10).replace(/-/g, ""));
+  }
+  return true;
+}
+
+function matchesTradeFilters(trade) {
+  const hasFilter = Boolean(
+    selectedCode.value ||
+    selectedSide.value ||
+    searchText.value.trim() ||
+    (isDateRange.value ? dateRange.value?.[0] && dateRange.value?.[1] : dateSingle.value)
+  );
+  let matches = true;
+  if (selectedCode.value) matches = matches && trade.code === selectedCode.value;
+  if (selectedSide.value) {
+    const sideMatches = selectedSide.value === "reverse_repo"
+      ? isReverseRepo(trade.code)
+      : selectedSide.value === "buy"
+      ? trade.side === "买入"
+      : trade.side === "卖出";
+    matches = matches && sideMatches;
+  }
+  if (searchText.value.trim()) {
+    const query = searchText.value.trim().toLowerCase();
+    matches = matches && (trade.code.includes(query) || trade.name.toLowerCase().includes(query));
+  }
+  if (isDateRange.value && dateRange.value?.[0] && dateRange.value?.[1] || !isDateRange.value && dateSingle.value) {
+    matches = matches && tradeDateMatches(trade);
+  }
+  return invertOnly.value && hasFilter ? !matches : matches;
+}
+
+const filteredTrades = computed(() => {
+  const result = props.trades.filter((trade) => {
+    if (!showCleared.value && clearedCodes.value.has(trade.code)) return false;
+    return matchesTradeFilters(trade);
+  });
+  if (!netOnly.value) return result;
 
   const netBase = result.filter((trade) => !profitableClearedTrades.value.has(trade));
   const preRemoved = result.filter((trade) => profitableClearedTrades.value.has(trade));
@@ -576,26 +572,9 @@ function summaryCodeSort(a, b) {
 }
 
 const summaryTrades = computed(() => {
-  let endDate = "";
-  if (isDateRange.value && dateRange.value?.[1]) {
-    endDate = formatTs(dateRange.value[1]);
-  } else if (!isDateRange.value && dateSingle.value) {
-    endDate = formatTs(dateSingle.value);
-  }
-
   return props.trades.filter((trade) => {
-    if (selectedCode.value && trade.code !== selectedCode.value) return false;
-    if (selectedSide.value) {
-      if (selectedSide.value === "reverse_repo" && !isReverseRepo(trade.code)) return false;
-      if (selectedSide.value === "buy" && trade.side !== "买入") return false;
-      if (selectedSide.value === "sell" && trade.side !== "卖出") return false;
-    }
-    if (searchText.value) {
-      const query = searchText.value.toLowerCase();
-      if (!trade.code.includes(query) && !trade.name.toLowerCase().includes(query)) return false;
-    }
-    if (endDate && trade.datetime.split(" ")[0] > endDate) return false;
-    return true;
+    if (!showCleared.value && clearedCodes.value.has(trade.code)) return false;
+    return matchesTradeFilters(trade);
   });
 });
 
