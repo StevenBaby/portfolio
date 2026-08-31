@@ -1084,6 +1084,29 @@ const columns = [
       (props.quotes[a.code]?.price || 0) - (props.quotes[b.code]?.price || 0),
   },
   {
+    title: "建议价",
+    key: "suggestedPrice",
+    width: 100,
+    render: (row) => {
+      if (isReverseRepo(row.code)) return "--";
+      if (hideAmount.value) return "***";
+      const profile = holdingProfiles.value[row.code] || {};
+      const rise = Number(profile.rise_pct ?? 5) / 100;
+      const fall = Number(profile.fall_pct ?? 5) / 100;
+      const suggested = row.side === "买入" ? row.price * (1 + rise) : row.price * (1 - fall);
+      if (!(suggested > 0)) return "--";
+      const cny = row.code === "518880" ? ` ¥${(suggested / goldPerShare.value).toFixed(2)}/g` : "";
+      return h("span", {}, [suggested.toFixed(3), h("span", { class: "holding-sub" }, cny)]);
+    },
+    sorter: (a, b) => {
+      const profileA = holdingProfiles.value[a.code] || {};
+      const profileB = holdingProfiles.value[b.code] || {};
+      const valueA = a.price * (1 + (a.side === "买入" ? Number(profileA.rise_pct ?? 5) : -Number(profileA.fall_pct ?? 5)) / 100);
+      const valueB = b.price * (1 + (b.side === "买入" ? Number(profileB.rise_pct ?? 5) : -Number(profileB.fall_pct ?? 5)) / 100);
+      return valueA - valueB;
+    },
+  },
+  {
     title: "浮动盈亏",
     key: "floatPnl",
     width: 100,

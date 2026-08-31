@@ -75,7 +75,7 @@
 
 <script setup>
 import { ref, computed, h, watch, nextTick } from "vue";
-import { NDataTable, NTag, NCheckbox, NSelect, NColorPicker } from "naive-ui";
+import { NDataTable, NTag, NCheckbox, NSelect, NColorPicker, NInputNumber } from "naive-ui";
 import VChart from "vue-echarts";
 import { use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
@@ -242,7 +242,13 @@ function updateHoldingProfile(row, field, value) {
     ...holdingProfiles.value,
     [row.code]: updated,
   };
-  saveHoldingProfile(row.code, updated.name || "", updated.color || "#d03050");
+  saveHoldingProfile(
+    row.code,
+    updated.name || "",
+    updated.color || "#d03050",
+    updated.rise_pct ?? 5,
+    updated.fall_pct ?? 5
+  );
 }
 
 // ============ 全局总成本 ============
@@ -329,6 +335,33 @@ const holdingColumns = computed(() => [
         "onUpdate:value": (value) => setHoldingColor(row, value),
       });
     },
+  }] : []),
+  ...(editHoldingInfo.value ? [{
+    title: "涨幅",
+    key: "rise_pct",
+    width: 78,
+    render: (row) => h(NInputNumber, {
+      value: holdingProfiles.value[row.code]?.rise_pct ?? 5,
+      min: 0,
+      max: 100,
+      step: 0.5,
+      showButton: false,
+      size: "small",
+      onUpdateValue: (value) => updateHoldingProfile(row, "rise_pct", value ?? 5),
+    }),
+  }, {
+    title: "跌幅",
+    key: "fall_pct",
+    width: 78,
+    render: (row) => h(NInputNumber, {
+      value: holdingProfiles.value[row.code]?.fall_pct ?? 5,
+      min: 0,
+      max: 100,
+      step: 0.5,
+      showButton: false,
+      size: "small",
+      onUpdateValue: (value) => updateHoldingProfile(row, "fall_pct", value ?? 5),
+    }),
   }] : []),
   {
     title: "持仓",

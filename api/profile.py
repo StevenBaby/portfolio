@@ -17,6 +17,8 @@ class HoldingProfile(BaseModel):
     code: str = Field(pattern=r"^\d{6}$")
     name: str = ""
     color: str = "#d03050"
+    rise_pct: float = Field(default=5, ge=0, le=100)
+    fall_pct: float = Field(default=5, ge=0, le=100)
 
 
 class GoldPerShare(BaseModel):
@@ -49,7 +51,7 @@ def list_profiles() -> list[dict]:
     config = _read_config()
     holdings = config.get("holdings", {})
     return [
-        {"code": k, "name": v.get("name", ""), "color": v.get("color", "#d03050")}
+        {"code": k, "name": v.get("name", ""), "color": v.get("color", "#d03050"), "rise_pct": v.get("rise_pct", 5), "fall_pct": v.get("fall_pct", 5)}
         for k, v in holdings.items()
     ]
 
@@ -61,6 +63,8 @@ def save_profile(profile: HoldingProfile) -> dict:
         config.setdefault("holdings", {})[profile.code] = {
             "name": profile.name.strip(),
             "color": profile.color,
+            "rise_pct": profile.rise_pct,
+            "fall_pct": profile.fall_pct,
         }
         _write_config(config)
     return {"code": profile.code, "name": profile.name.strip(), "color": profile.color}

@@ -54,7 +54,12 @@ export async function loadHoldingProfiles() {
     const data = await resp.json();
     const map = {};
     for (const item of data) {
-      map[item.code] = { name: item.name || "", color: item.color || "#d03050" };
+      map[item.code] = {
+        name: item.name || "",
+        color: item.color || "#d03050",
+        rise_pct: Number(item.rise_pct ?? 5),
+        fall_pct: Number(item.fall_pct ?? 5),
+      };
     }
     holdingProfiles.value = map;
   } catch (e) {
@@ -63,14 +68,14 @@ export async function loadHoldingProfiles() {
 }
 
 const _saveTimers = {};
-export function saveHoldingProfile(code, name, color) {
+export function saveHoldingProfile(code, name, color, risePct = 5, fallPct = 5) {
   if (_saveTimers[code]) clearTimeout(_saveTimers[code]);
   _saveTimers[code] = setTimeout(async () => {
     try {
       await fetch(`${API_BASE}/api/profile`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, name: name || "", color: color || "#d03050" }),
+        body: JSON.stringify({ code, name: name || "", color: color || "#d03050", rise_pct: Number(risePct), fall_pct: Number(fallPct) }),
       });
     } catch (e) {
       console.error("保存持仓配置失败:", e);
