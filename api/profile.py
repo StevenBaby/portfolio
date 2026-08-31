@@ -19,6 +19,10 @@ class HoldingProfile(BaseModel):
     color: str = "#d03050"
 
 
+class GoldPerShare(BaseModel):
+    value: float = Field(gt=0, lt=1)
+
+
 class PropertyProfile(BaseModel):
     asset: str = Field(min_length=1, max_length=64)
     color: str = "#d03050"
@@ -75,6 +79,21 @@ def set_total_cost(body: dict) -> dict:
         config["total_cost"] = float(body.get("total_cost", 0))
         _write_config(config)
     return {"total_cost": config["total_cost"]}
+
+
+@router.get("/gold_per_share")
+def get_gold_per_share() -> dict:
+    config = _read_config()
+    return {"value": config.get("gold_per_share", 0.00951)}
+
+
+@router.post("/gold_per_share")
+def set_gold_per_share(body: GoldPerShare) -> dict:
+    with _write_lock:
+        config = _read_config()
+        config["gold_per_share"] = body.value
+        _write_config(config)
+    return {"value": body.value}
 
 
 @router.delete("/{code}")

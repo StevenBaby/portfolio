@@ -32,6 +32,7 @@
             :holdings="holdings"
           />
           <PropertyPage v-else-if="tab === 'property'" />
+          <ToolsPage v-else-if="tab === 'tools'" />
           <HoldingsPage
             v-else-if="tab === 'holdings'"
             ref="holdingsRef"
@@ -62,12 +63,14 @@ import TradesPage from "./pages/TradesPage.vue";
 import HoldingsPage from "./pages/HoldingsPage.vue";
 import MarketPage from "./pages/MarketPage.vue";
 import PropertyPage from "./pages/PropertyPage.vue";
+import ToolsPage from "./pages/ToolsPage.vue";
 
 const tabs = [
   { key: "market", label: "市场" },
   { key: "holdings", label: "持仓" },
   { key: "trades", label: "明细" },
   { key: "property", label: "资产" },
+  { key: "tools", label: "工具" },
 ];
 const tab = persistedRef("app_tab", "holdings");
 const trades = ref([]);

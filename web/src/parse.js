@@ -44,6 +44,7 @@ export function persistedRef(key, defaultValue) {
 
 export const holdingProfiles = ref({});
 export const propertyProfiles = ref({});
+export const goldPerShare = ref(0.00951);
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8090" : "";
 
@@ -125,6 +126,26 @@ export async function saveTotalCost(cost) {
   } catch (e) {
     console.error("保存总成本失败:", e);
   }
+}
+
+export async function loadGoldPerShare() {
+  const resp = await fetch(`${API_BASE}/api/profile/gold_per_share`);
+  const value = Number((await resp.json()).value);
+  goldPerShare.value = Number.isFinite(value) && value > 0 ? value : 0.00951;
+  return goldPerShare.value;
+}
+
+export async function saveGoldPerShare(value) {
+  const resp = await fetch(`${API_BASE}/api/profile/gold_per_share`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ value }),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const result = Number((await resp.json()).value);
+  if (!Number.isFinite(result) || result <= 0) throw new Error("invalid gold per share");
+  goldPerShare.value = result;
+  return result;
 }
 
 /**

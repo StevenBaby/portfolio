@@ -91,6 +91,116 @@ body {
   overflow: hidden;
 }
 
+.tools-page {
+  overflow: auto;
+}
+
+.tool-grid {
+  display: grid;
+  grid-template-columns: minmax(420px, 720px);
+  gap: 16px;
+  align-items: start;
+}
+
+.tool-panel {
+  padding: 18px;
+  border: 1px solid #2a2a2e;
+  border-radius: 6px;
+  background: #18181c;
+}
+
+.tool-panel-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.tool-panel-title {
+  color: #e0e0e0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.tool-badge {
+  flex-shrink: 0;
+  color: #d03050;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.converter-rate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: #777;
+  font-size: 12px;
+}
+
+.converter-rate strong {
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.converter-rate .n-input {
+  width: 110px;
+}
+
+.converter-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.converter-field label {
+  display: block;
+  margin-bottom: 8px;
+  color: #aaa;
+  font-size: 13px;
+}
+
+.input-unit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-unit .n-input {
+  flex: 1;
+}
+
+.input-unit > span {
+  flex-shrink: 0;
+  color: #777;
+  font-size: 12px;
+}
+
+.converter-arrow {
+  padding-bottom: 7px;
+  color: #d03050;
+  font-size: 16px;
+  text-align: center;
+}
+
+@media (max-width: 680px) {
+  .tool-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .converter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .converter-arrow {
+    padding: 0;
+    transform: rotate(90deg);
+  }
+}
+
 .chart-container {
   flex-shrink: 0;
   padding-top: 8px;
