@@ -200,6 +200,7 @@ import {
   GridComponent,
   LegendComponent,
   TooltipComponent,
+  DataZoomComponent,
 } from "echarts/components";
 import {
   formatDate,
@@ -221,6 +222,7 @@ use([
   GridComponent,
   LegendComponent,
   TooltipComponent,
+  DataZoomComponent,
 ]);
 
 const API = import.meta.env.DEV ? "http://localhost:8090" : "";
@@ -237,7 +239,14 @@ const metricOptions = [
 ];
 
 function selectAllLegend() {
-  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value, props.trades, dailyMv.value, holdingProfiles.value, props.quotes);
+  const { series } = aggregateByDate(
+    filteredTrades.value,
+    chartMetric.value,
+    props.trades,
+    dailyMv.value,
+    holdingProfiles.value,
+    props.quotes,
+  );
   const sel = {};
   series.forEach((s) => {
     sel[s.code] = true;
@@ -246,7 +255,14 @@ function selectAllLegend() {
 }
 
 function clearAllLegend() {
-  const { series } = aggregateByDate(filteredTrades.value, chartMetric.value, props.trades, dailyMv.value, holdingProfiles.value, props.quotes);
+  const { series } = aggregateByDate(
+    filteredTrades.value,
+    chartMetric.value,
+    props.trades,
+    dailyMv.value,
+    holdingProfiles.value,
+    props.quotes,
+  );
   const sel = {};
   series.forEach((s) => {
     sel[s.code] = false;
@@ -292,17 +308,19 @@ async function loadDailyCloseValues() {
   }
 }
 
-const selectedSummaryDate = computed(() => (
+const selectedSummaryDate = computed(() =>
   (isDateRange.value && dateRange.value?.[1]) ||
   (!isDateRange.value && dateSingle.value)
     ? formatTs(isDateRange.value ? dateRange.value[1] : dateSingle.value)
-    : ""
-));
+    : "",
+);
 const summaryPriceDate = computed(() => {
   const selectedEnd = selectedSummaryDate.value;
   const dates = Object.keys(dailyClosePrices.value).sort();
   if (!dates.length) return "";
-  return selectedEnd ? dates.filter((date) => date <= selectedEnd).at(-1) || dates[0] : dates.at(-1);
+  return selectedEnd
+    ? dates.filter((date) => date <= selectedEnd).at(-1) || dates[0]
+    : dates.at(-1);
 });
 const todayDate = (() => {
   const now = new Date();
@@ -313,16 +331,24 @@ const sharesAtDate = computed(() => {
   const cutoff = summaryPriceDate.value;
   const shares = {};
   for (const trade of props.trades) {
-    if (isReverseRepo(trade.code) || (cutoff && trade.datetime.split(" ")[0] > cutoff)) continue;
-    shares[trade.code] = (shares[trade.code] || 0) + (trade.side === "买入" ? trade.quantity : -trade.quantity);
+    if (
+      isReverseRepo(trade.code) ||
+      (cutoff && trade.datetime.split(" ")[0] > cutoff)
+    )
+      continue;
+    shares[trade.code] =
+      (shares[trade.code] || 0) +
+      (trade.side === "买入" ? trade.quantity : -trade.quantity);
   }
   return shares;
 });
 
 function getSummaryPrice(code) {
   const latestTrade = props.trades.find((trade) => trade.code === code);
-  if (!selectedSummaryDate.value) return props.quotes[code]?.price || latestTrade?.price || 0;
-  if (isMarketOpenDate.value) return props.quotes[code]?.price || latestTrade?.price || 0;
+  if (!selectedSummaryDate.value)
+    return props.quotes[code]?.price || latestTrade?.price || 0;
+  if (isMarketOpenDate.value)
+    return props.quotes[code]?.price || latestTrade?.price || 0;
   const value = dailyClosePrices.value[summaryPriceDate.value]?.[code] || 0;
   if (value > 0) return value;
   return latestTrade?.price || 0;
@@ -362,7 +388,9 @@ const summaryPagination = reactive({
   showSizePicker: true,
   pageSizes: [20, 50, 100],
   showQuickJumper: true,
-  onChange: (page) => { summaryPagination.page = page; },
+  onChange: (page) => {
+    summaryPagination.page = page;
+  },
   onUpdatePageSize: (size) => {
     summaryPagination.pageSize = size;
     summaryPagination.page = 1;
@@ -370,9 +398,14 @@ const summaryPagination = reactive({
 });
 
 // ============ 筛选选项 ============
-const clearedCodes = computed(() => new Set(
-  props.holdings.filter((holding) => holding.shares === 0).map((holding) => holding.code)
-));
+const clearedCodes = computed(
+  () =>
+    new Set(
+      props.holdings
+        .filter((holding) => holding.shares === 0)
+        .map((holding) => holding.code),
+    ),
+);
 
 // 净交易前置处理：清仓亏损不切断计算，累计到后续清仓转为盈利时整体删除。
 const profitableClearedTrades = computed(() => {
@@ -409,7 +442,8 @@ const codeOptions = computed(() => {
   const codes = new Map();
   props.trades.forEach((trade) => {
     if (!showCleared.value && clearedCodes.value.has(trade.code)) return;
-    if (!codes.has(trade.code)) codes.set(trade.code, `${trade.code} ${trade.name}`);
+    if (!codes.has(trade.code))
+      codes.set(trade.code, `${trade.code} ${trade.name}`);
   });
   return Array.from(codes.entries()).map(([value, label]) => ({
     value,
@@ -417,11 +451,18 @@ const codeOptions = computed(() => {
   }));
 });
 
-watch([showCleared, () => props.holdings], () => {
-  if (selectedCode.value && !codeOptions.value.some((option) => option.value === selectedCode.value)) {
-    selectedCode.value = null;
-  }
-}, { deep: true });
+watch(
+  [showCleared, () => props.holdings],
+  () => {
+    if (
+      selectedCode.value &&
+      !codeOptions.value.some((option) => option.value === selectedCode.value)
+    ) {
+      selectedCode.value = null;
+    }
+  },
+  { deep: true },
+);
 
 const sideOptions = [
   { value: "buy", label: "买入" },
@@ -441,7 +482,12 @@ function tradeDateMatches(trade) {
     return time >= start && time <= end;
   }
   if (!isDateRange.value && dateSingle.value) {
-    return date === formatDate(new Date(dateSingle.value).toISOString().slice(0, 10).replace(/-/g, ""));
+    return (
+      date ===
+      formatDate(
+        new Date(dateSingle.value).toISOString().slice(0, 10).replace(/-/g, ""),
+      )
+    );
   }
   return true;
 }
@@ -451,23 +497,32 @@ function matchesTradeFilters(trade) {
     selectedCode.value ||
     selectedSide.value ||
     searchText.value.trim() ||
-    (isDateRange.value ? dateRange.value?.[0] && dateRange.value?.[1] : dateSingle.value)
+    (isDateRange.value
+      ? dateRange.value?.[0] && dateRange.value?.[1]
+      : dateSingle.value),
   );
   let matches = true;
-  if (selectedCode.value) matches = matches && trade.code === selectedCode.value;
+  if (selectedCode.value)
+    matches = matches && trade.code === selectedCode.value;
   if (selectedSide.value) {
-    const sideMatches = selectedSide.value === "reverse_repo"
-      ? isReverseRepo(trade.code)
-      : selectedSide.value === "buy"
-      ? trade.side === "买入"
-      : trade.side === "卖出";
+    const sideMatches =
+      selectedSide.value === "reverse_repo"
+        ? isReverseRepo(trade.code)
+        : selectedSide.value === "buy"
+          ? trade.side === "买入"
+          : trade.side === "卖出";
     matches = matches && sideMatches;
   }
   if (searchText.value.trim()) {
     const query = searchText.value.trim().toLowerCase();
-    matches = matches && (trade.code.includes(query) || trade.name.toLowerCase().includes(query));
+    matches =
+      matches &&
+      (trade.code.includes(query) || trade.name.toLowerCase().includes(query));
   }
-  if (isDateRange.value && dateRange.value?.[0] && dateRange.value?.[1] || !isDateRange.value && dateSingle.value) {
+  if (
+    (isDateRange.value && dateRange.value?.[0] && dateRange.value?.[1]) ||
+    (!isDateRange.value && dateSingle.value)
+  ) {
     matches = matches && tradeDateMatches(trade);
   }
   return invertOnly.value && hasFilter ? !matches : matches;
@@ -480,8 +535,12 @@ const filteredTrades = computed(() => {
   });
   if (!netOnly.value) return result;
 
-  const netBase = result.filter((trade) => !profitableClearedTrades.value.has(trade));
-  const preRemoved = result.filter((trade) => profitableClearedTrades.value.has(trade));
+  const netBase = result.filter(
+    (trade) => !profitableClearedTrades.value.has(trade),
+  );
+  const preRemoved = result.filter((trade) =>
+    profitableClearedTrades.value.has(trade),
+  );
 
   // 净交易：分两轮配对
   const nonRepo = netBase.filter((t) => !isReverseRepo(t.code));
@@ -504,7 +563,9 @@ const filteredTrades = computed(() => {
       if (buyQty > 0 && buyQty === sellQty) {
         const buyTotal = buys.reduce((s, b) => s + b.amount + b.fee, 0);
         const sellTotal = sells.reduce((s, s2) => s + s2.amount - s2.fee, 0);
-        const totalFees = buys.reduce((s, b) => s + b.fee, 0) + sells.reduce((s, s2) => s + s2.fee, 0);
+        const totalFees =
+          buys.reduce((s, b) => s + b.fee, 0) +
+          sells.reduce((s, s2) => s + s2.fee, 0);
         if (buyTotal + totalFees < sellTotal) {
           buys.forEach((b) => removed.add(b));
           sells.forEach((s) => removed.add(s));
@@ -611,8 +672,10 @@ const tradeSummary = computed(() => {
       const price = getSummaryPrice(group.code);
       const avgCost = group.shares > 0 ? group.total_cost / group.shares : 0;
       const marketValue = price * group.shares;
-      const floatPnl = group.shares > 0 ? marketValue - group.total_cost : -group.total_cost;
-      const pnlPct = group.total_cost > 0 ? (floatPnl / group.total_cost) * 100 : 0;
+      const floatPnl =
+        group.shares > 0 ? marketValue - group.total_cost : -group.total_cost;
+      const pnlPct =
+        group.total_cost > 0 ? (floatPnl / group.total_cost) * 100 : 0;
       return {
         ...group,
         avg_cost: avgCost,
@@ -628,37 +691,128 @@ const tradeSummary = computed(() => {
 });
 
 const summaryColumns = [
-  { title: "代码", key: "code", width: 80, render: (row) => displayData(row.code, hideAmount.value, null, "***") },
-  { title: "名称", key: "name", width: 110, render: (row) => {
-    const name = holdingProfiles.value[row.code]?.name || row.name;
-    const color = holdingProfiles.value[row.code]?.color || "#d03050";
-    if (hideAmount.value) return "***";
-    return h("div", { class: "holding-name-cell" }, [
-      h("span", { title: row.name }, name),
-      h("span", { class: "holding-name-color", style: { backgroundColor: color }, title: color }),
-    ]);
-  } },
-  { title: "持仓", key: "shares", width: 90, render: (row) => displayData(row.shares > 0 ? row.shares : null, hideAmount.value, (v) => v.toLocaleString(), "***") },
-  { title: "平均成本", key: "avg_cost", width: 100, render: (row) => {
-    if (hideAmount.value) return "***";
-    if (!row.shares || row.shares <= 0) return "--";
-    const val = row.avg_cost.toFixed(4);
-    const cny = row.code === "518880" ? ` ¥${(row.avg_cost / goldPerShare.value).toFixed(2)}/g` : "";
-    return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
-  } },
-  { title: "当日价", key: "price", width: 100, render: (row) => {
-    if (hideAmount.value) return "***";
-    if (!row.price) return "--";
-    const val = row.price.toFixed(3);
-    const cny = row.code === "518880" ? ` ¥${(row.price / goldPerShare.value).toFixed(2)}/g` : "";
-    return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
-  } },
-  { title: "总成本", key: "total_cost", width: 110, render: (row) => displayData(row.total_cost, hideAmount.value, (v) => `¥${v.toFixed(2)}`, "***") },
-  { title: "市值", key: "marketValue", width: 110, render: (row) => displayData(row.price && row.shares > 0 ? row.marketValue : null, hideAmount.value, (v) => `¥${v.toFixed(2)}`, "***") },
-  { title: "浮动盈亏", key: "floatPnl", width: 110, render: (row) => pnlRender(row.floatPnl) },
-  { title: "收益率", key: "pnlPct", width: 85, render: (row) => row.price && row.shares > 0 ? pctRender(row.pnlPct) : hideAmount.value ? "***" : "--" },
-  { title: "买卖", key: "trades", width: 65, render: (row) => `${row.buy_count}/${row.sell_count}` },
-  { title: "状态", key: "status", width: 70, render: (row) => row.cleared ? h("span", { class: "tag-cleared" }, "已清仓") : h("span", { class: "tag-holding" }, "持有") },
+  {
+    title: "代码",
+    key: "code",
+    width: 80,
+    render: (row) => displayData(row.code, hideAmount.value, null, "***"),
+  },
+  {
+    title: "名称",
+    key: "name",
+    width: 110,
+    render: (row) => {
+      const name = holdingProfiles.value[row.code]?.name || row.name;
+      const color = holdingProfiles.value[row.code]?.color || "#d03050";
+      if (hideAmount.value) return "***";
+      return h("div", { class: "holding-name-cell" }, [
+        h("span", { title: row.name }, name),
+        h("span", {
+          class: "holding-name-color",
+          style: { backgroundColor: color },
+          title: color,
+        }),
+      ]);
+    },
+  },
+  {
+    title: "持仓",
+    key: "shares",
+    width: 90,
+    render: (row) =>
+      displayData(
+        row.shares > 0 ? row.shares : null,
+        hideAmount.value,
+        (v) => v.toLocaleString(),
+        "***",
+      ),
+  },
+  {
+    title: "平均成本",
+    key: "avg_cost",
+    width: 100,
+    render: (row) => {
+      if (hideAmount.value) return "***";
+      if (!row.shares || row.shares <= 0) return "--";
+      const val = row.avg_cost.toFixed(4);
+      const cny =
+        row.code === "518880"
+          ? ` ¥${(row.avg_cost / goldPerShare.value).toFixed(2)}/g`
+          : "";
+      return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
+    },
+  },
+  {
+    title: "当日价",
+    key: "price",
+    width: 100,
+    render: (row) => {
+      if (hideAmount.value) return "***";
+      if (!row.price) return "--";
+      const val = row.price.toFixed(3);
+      const cny =
+        row.code === "518880"
+          ? ` ¥${(row.price / goldPerShare.value).toFixed(2)}/g`
+          : "";
+      return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
+    },
+  },
+  {
+    title: "总成本",
+    key: "total_cost",
+    width: 110,
+    render: (row) =>
+      displayData(
+        row.total_cost,
+        hideAmount.value,
+        (v) => `¥${v.toFixed(2)}`,
+        "***",
+      ),
+  },
+  {
+    title: "市值",
+    key: "marketValue",
+    width: 110,
+    render: (row) =>
+      displayData(
+        row.price && row.shares > 0 ? row.marketValue : null,
+        hideAmount.value,
+        (v) => `¥${v.toFixed(2)}`,
+        "***",
+      ),
+  },
+  {
+    title: "浮动盈亏",
+    key: "floatPnl",
+    width: 110,
+    render: (row) => pnlRender(row.floatPnl),
+  },
+  {
+    title: "收益率",
+    key: "pnlPct",
+    width: 85,
+    render: (row) =>
+      row.price && row.shares > 0
+        ? pctRender(row.pnlPct)
+        : hideAmount.value
+          ? "***"
+          : "--",
+  },
+  {
+    title: "买卖",
+    key: "trades",
+    width: 65,
+    render: (row) => `${row.buy_count}/${row.sell_count}`,
+  },
+  {
+    title: "状态",
+    key: "status",
+    width: 70,
+    render: (row) =>
+      row.cleared
+        ? h("span", { class: "tag-cleared" }, "已清仓")
+        : h("span", { class: "tag-holding" }, "持有"),
+  },
 ];
 
 // ============ 直方图 ============
@@ -669,7 +823,7 @@ const chartOption = computed(() => {
     props.trades,
     dailyMv.value,
     holdingProfiles.value,
-    props.quotes
+    props.quotes,
   );
   const filteredSeries = series.filter((s) => s.data.some((v) => v !== 0));
   return {
@@ -678,17 +832,19 @@ const chartOption = computed(() => {
       formatter: (params) => {
         if (!params?.length) return "";
         const date = params[0]?.axisValue || "";
-        const lines = params.filter((p) => p && p.value !== 0 && p.value != null);
+        const lines = params.filter(
+          (p) => p && p.value !== 0 && p.value != null,
+        );
         if (!lines.length) return "";
         return [
           date,
           ...lines.map(
             (p) =>
-              `${p.marker}${hideAmount.value ? "***" : (filteredSeries.find((s) => s.code === p.seriesName)?.name || p.seriesName)}: ${
+              `${p.marker}${hideAmount.value ? "***" : filteredSeries.find((s) => s.code === p.seriesName)?.name || p.seriesName}: ${
                 chartMetric.value === "quantity"
                   ? Math.round(p.value)
                   : p.value.toFixed(2)
-              }`
+              }`,
           ),
         ].join("<br/>");
       },
@@ -699,9 +855,16 @@ const chartOption = computed(() => {
       textStyle: { color: "#aaa", fontSize: 11 },
       data: filteredSeries.map((s) => s.code),
       selected: legendSelected.value,
-      formatter: (code) => hideAmount.value ? "***" : (filteredSeries.find((s) => s.code === code)?.name || code),
+      formatter: (code) =>
+        hideAmount.value
+          ? "***"
+          : filteredSeries.find((s) => s.code === code)?.name || code,
     },
-    grid: { top: 10, left: 50, right: 20, bottom: 60 },
+    dataZoom: [
+      { type: "inside", xAxisIndex: 0 },
+      { type: "slider", xAxisIndex: 0, bottom: 35, height: 20 },
+    ],
+    grid: { left: 20, right: 20, top: 10, bottom: 80 },
     xAxis: {
       type: "category",
       data: dates,
@@ -711,7 +874,10 @@ const chartOption = computed(() => {
     },
     yAxis: {
       type: "value",
-      axisLabel: { color: "#888", formatter: () => hideAmount.value ? "***" : "" },
+      axisLabel: {
+        color: "#888",
+        formatter: () => (hideAmount.value ? "***" : ""),
+      },
       axisLine: { lineStyle: { color: "#333" } },
       splitLine: { lineStyle: { color: "#222" } },
     },
@@ -739,7 +905,9 @@ async function loadDailyMv() {
 watch(subTab, (v) => {
   if (
     (v === "line" || v === "chart") &&
-    (chartMetric.value === "amount" || chartMetric.value === "daily_pnl" || chartMetric.value === "cumulative_pnl") &&
+    (chartMetric.value === "amount" ||
+      chartMetric.value === "daily_pnl" ||
+      chartMetric.value === "cumulative_pnl") &&
     !Object.keys(dailyMv.value).length
   ) {
     loadDailyMv();
@@ -757,7 +925,9 @@ watch(chartMetric, (v) => {
 onMounted(() => {
   if (
     (subTab.value === "line" || subTab.value === "chart") &&
-    (chartMetric.value === "amount" || chartMetric.value === "daily_pnl" || chartMetric.value === "cumulative_pnl") &&
+    (chartMetric.value === "amount" ||
+      chartMetric.value === "daily_pnl" ||
+      chartMetric.value === "cumulative_pnl") &&
     !Object.keys(dailyMv.value).length
   ) {
     loadDailyMv();
@@ -771,7 +941,7 @@ const lineChartOption = computed(() => {
     props.trades,
     dailyMv.value,
     holdingProfiles.value,
-    props.quotes
+    props.quotes,
   );
 
   let cumSeries;
@@ -785,7 +955,10 @@ const lineChartOption = computed(() => {
         return dailyMv.value[d]?.[s.code] || 0;
       }),
     }));
-  } else if (chartMetric.value === "daily_pnl" || chartMetric.value === "cumulative_pnl") {
+  } else if (
+    chartMetric.value === "daily_pnl" ||
+    chartMetric.value === "cumulative_pnl"
+  ) {
     // 盈亏模式已经是每日收盘市值减移动平均持仓成本的快照。
     cumSeries = series;
   } else if (chartMetric.value === "quantity") {
@@ -812,17 +985,19 @@ const lineChartOption = computed(() => {
       formatter: (params) => {
         if (!params?.length) return "";
         const date = params[0]?.axisValue || "";
-        const lines = params.filter((p) => p && p.value !== 0 && p.value != null);
+        const lines = params.filter(
+          (p) => p && p.value !== 0 && p.value != null,
+        );
         if (!lines.length) return "";
         return [
           date,
           ...lines.map(
             (p) =>
-              `${p.marker}${hideAmount.value ? "***" : (filteredSeries.find((s) => s.code === p.seriesName)?.name || p.seriesName)}: ${
+              `${p.marker}${hideAmount.value ? "***" : filteredSeries.find((s) => s.code === p.seriesName)?.name || p.seriesName}: ${
                 chartMetric.value === "quantity"
                   ? Math.round(p.value)
                   : p.value.toFixed(2)
-              }`
+              }`,
           ),
         ].join("<br/>");
       },
@@ -833,9 +1008,16 @@ const lineChartOption = computed(() => {
       textStyle: { color: "#aaa", fontSize: 11 },
       data: filteredSeries.map((s) => s.code),
       selected: legendSelected.value,
-      formatter: (code) => hideAmount.value ? "***" : (filteredSeries.find((s) => s.code === code)?.name || code),
+      formatter: (code) =>
+        hideAmount.value
+          ? "***"
+          : filteredSeries.find((s) => s.code === code)?.name || code,
     },
-    grid: { top: 10, left: 50, right: 20, bottom: 60 },
+    dataZoom: [
+      { type: "inside", xAxisIndex: 0 },
+      { type: "slider", xAxisIndex: 0, bottom: 35, height: 20 },
+    ],
+    grid: { left: 20, right: 20, top: 10, bottom: 80 },
     xAxis: {
       type: "category",
       data: dates,
@@ -845,7 +1027,10 @@ const lineChartOption = computed(() => {
     },
     yAxis: {
       type: "value",
-      axisLabel: { color: "#888", formatter: () => hideAmount.value ? "***" : "" },
+      axisLabel: {
+        color: "#888",
+        formatter: () => (hideAmount.value ? "***" : ""),
+      },
       axisLine: { lineStyle: { color: "#333" } },
       splitLine: { lineStyle: { color: "#222" } },
     },
@@ -866,20 +1051,20 @@ const lineChartOption = computed(() => {
 const buyCount = computed(
   () =>
     filteredTrades.value.filter(
-      (t) => t.side === "买入" && !isReverseRepo(t.code)
-    ).length
+      (t) => t.side === "买入" && !isReverseRepo(t.code),
+    ).length,
 );
 const sellCount = computed(
   () =>
     filteredTrades.value.filter(
-      (t) => t.side === "卖出" && !isReverseRepo(t.code)
-    ).length
+      (t) => t.side === "卖出" && !isReverseRepo(t.code),
+    ).length,
 );
 const repoCount = computed(
-  () => filteredTrades.value.filter((t) => isReverseRepo(t.code)).length
+  () => filteredTrades.value.filter((t) => isReverseRepo(t.code)).length,
 );
 const totalFee = computed(() =>
-  filteredTrades.value.reduce((sum, t) => sum + (t.fee || 0), 0)
+  filteredTrades.value.reduce((sum, t) => sum + (t.fee || 0), 0),
 );
 const formatTs = (ts) => {
   if (!ts) return "";
@@ -944,16 +1129,19 @@ function calcPnl(tradesList) {
 
 const filteredPnl = computed(() => {
   if (subTab.value === "summary") {
-    return tradeSummary.value.reduce((sum, item) => sum + (item.floatPnl || 0), 0);
+    return tradeSummary.value.reduce(
+      (sum, item) => sum + (item.floatPnl || 0),
+      0,
+    );
   }
   return calcPnl(filteredTrades.value);
 });
 const totalPnl = computed(() => calcPnl(props.trades));
 const filteredPnlResult = computed(() =>
-  pnlFormat(filteredPnl.value, hideAmount.value)
+  pnlFormat(filteredPnl.value, hideAmount.value),
 );
 const totalPnlResult = computed(() =>
-  pnlFormat(totalPnl.value, hideAmount.value)
+  pnlFormat(totalPnl.value, hideAmount.value),
 );
 
 // ============ 表格列定义 ============
@@ -964,12 +1152,12 @@ function sideTag(side, code) {
     return h(
       NTag,
       { type: "error", size: "small", bordered: false },
-      () => "买入"
+      () => "买入",
     );
   return h(
     NTag,
     { type: "success", size: "small", bordered: false },
-    () => "卖出"
+    () => "卖出",
   );
 }
 
@@ -1017,7 +1205,11 @@ const columns = [
       const color = holdingProfiles.value[row.code]?.color || "#d03050";
       return h("div", { class: "holding-name-cell" }, [
         h("span", { title: row.fullname }, name),
-        h("span", { class: "holding-name-color", style: { backgroundColor: color }, title: color }),
+        h("span", {
+          class: "holding-name-color",
+          style: { backgroundColor: color },
+          title: color,
+        }),
       ]);
     },
   },
@@ -1042,7 +1234,10 @@ const columns = [
     render: (row) => {
       if (hideAmount.value) return "***";
       const val = row.price.toFixed(3);
-      const cny = row.code === "518880" ? ` ¥${(row.price / goldPerShare.value).toFixed(2)}/g` : "";
+      const cny =
+        row.code === "518880"
+          ? ` ¥${(row.price / goldPerShare.value).toFixed(2)}/g`
+          : "";
       return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
     },
     sorter: (a, b) => a.price - b.price,
@@ -1056,7 +1251,10 @@ const columns = [
       const cur = props.quotes[row.code]?.price;
       if (!cur) return "--";
       const val = cur.toFixed(3);
-      const cny = row.code === "518880" ? ` ¥${(cur / goldPerShare.value).toFixed(2)}/g` : "";
+      const cny =
+        row.code === "518880"
+          ? ` ¥${(cur / goldPerShare.value).toFixed(2)}/g`
+          : "";
       return h("span", {}, [val, h("span", { class: "holding-sub" }, cny)]);
     },
     sorter: (a, b) =>
@@ -1072,16 +1270,35 @@ const columns = [
       const profile = holdingProfiles.value[row.code] || {};
       const rise = Number(profile.rise_pct ?? 5) / 100;
       const fall = Number(profile.fall_pct ?? 5) / 100;
-      const suggested = row.side === "买入" ? row.price * (1 + rise) : row.price * (1 - fall);
+      const suggested =
+        row.side === "买入" ? row.price * (1 + rise) : row.price * (1 - fall);
       if (!(suggested > 0)) return "--";
-      const cny = row.code === "518880" ? ` ¥${(suggested / goldPerShare.value).toFixed(2)}/g` : "";
-      return h("span", {}, [suggested.toFixed(3), h("span", { class: "holding-sub" }, cny)]);
+      const cny =
+        row.code === "518880"
+          ? ` ¥${(suggested / goldPerShare.value).toFixed(2)}/g`
+          : "";
+      return h("span", {}, [
+        suggested.toFixed(3),
+        h("span", { class: "holding-sub" }, cny),
+      ]);
     },
     sorter: (a, b) => {
       const profileA = holdingProfiles.value[a.code] || {};
       const profileB = holdingProfiles.value[b.code] || {};
-      const valueA = a.price * (1 + (a.side === "买入" ? Number(profileA.rise_pct ?? 5) : -Number(profileA.fall_pct ?? 5)) / 100);
-      const valueB = b.price * (1 + (b.side === "买入" ? Number(profileB.rise_pct ?? 5) : -Number(profileB.fall_pct ?? 5)) / 100);
+      const valueA =
+        a.price *
+        (1 +
+          (a.side === "买入"
+            ? Number(profileA.rise_pct ?? 5)
+            : -Number(profileA.fall_pct ?? 5)) /
+            100);
+      const valueB =
+        b.price *
+        (1 +
+          (b.side === "买入"
+            ? Number(profileB.rise_pct ?? 5)
+            : -Number(profileB.fall_pct ?? 5)) /
+            100);
       return valueA - valueB;
     },
   },
@@ -1093,7 +1310,8 @@ const columns = [
       if (hideAmount.value) return "***";
       const cur = props.quotes[row.code]?.price;
       if (!cur) return "--";
-      const pnl = (cur - row.price) * row.quantity * (row.side === "买入" ? 1 : -1);
+      const pnl =
+        (cur - row.price) * row.quantity * (row.side === "买入" ? 1 : -1);
       const cls = pnl >= 0 ? "amount-positive" : "amount-negative";
       const sign = pnl >= 0 ? "+" : "";
       return h("span", { class: cls }, sign + formatMoney(pnl));
@@ -1115,7 +1333,7 @@ const columns = [
         row.fee,
         hideAmount.value,
         (v) => (v > 0 ? v.toFixed(3) : "0.000"),
-        "0.000"
+        "0.000",
       ),
     sorter: (a, b) => a.fee - b.fee,
   },
