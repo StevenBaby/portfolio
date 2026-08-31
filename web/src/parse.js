@@ -186,16 +186,23 @@ export function aggregateByDate(trades, metric = "amount", calculationTrades = t
   const costByCode = {};
   const snapshots = {};
   const cashFlowByCode = {};
+  const quantityByCode = {};
+  const quantitySnapshots = {};
 
   const visibleCodes = new Set(trades.map((t) => t.code));
+  const isAmountMetric = metric === "amount";
   const isPnlMetric = metric === "daily_pnl" || metric === "cumulative_pnl";
   const orderedTrades = [...(isPnlMetric ? calculationTrades : trades)]
     .filter((t) => !isPnlMetric || visibleCodes.has(t.code))
     .sort((a, b) => a.datetime.localeCompare(b.datetime));
   for (const t of orderedTrades) {
     if (isReverseRepo(t.code)) continue;
-    const date = t.datetime.split(" ")[0];
+    const date = formatDate(t.datetime.split(" ")[0]);
     if (!byCode[t.code]) byCode[t.code] = { name: profiles[t.code]?.name || t.name, color: profiles[t.code]?.color, data: {} };
+    if (!quantityByCode[t.code]) quantityByCode[t.code] = 0;
+    quantityByCode[t.code] += t.side === "买入" ? t.quantity : -t.quantity;
+    quantitySnapshots[t.code] ||= {};
+    quantitySnapshots[t.code][date] = quantityByCode[t.code];
     if (!costByCode[t.code]) costByCode[t.code] = { shares: 0, cost: 0, realized: 0 };
     if (isPnlMetric) {
       cashFlowByCode[t.code] ||= {};
@@ -229,22 +236,26 @@ export function aggregateByDate(trades, metric = "amount", calculationTrades = t
         realized: position.realized,
       };
     }
-    const visibleDate = trades.some((visible) => visible.datetime.split(" ")[0] === date);
-    if (visibleDate && metric !== "pnl") {
+    const visibleDate = trades.some((visible) => formatDate(visible.datetime.split(" ")[0]) === date);
+    if (isAmountMetric) {
+      byCode[t.code].data[date] = (byCode[t.code].data[date] || 0) + val;
+    } else if (visibleDate && metric !== "pnl") {
       byCode[t.code].data[date] = (byCode[t.code].data[date] || 0) + val;
     }
   }
 
-  const dates = (isPnlMetric && Object.keys(dailyMarketValue).length)
-    ? Object.keys(dailyMarketValue).sort()
-    : [...new Set(trades.map((t) => t.datetime.split(" ")[0]))].sort();
+  const dates = (isAmountMetric && Object.keys(dailyMarketValue).length)
+    ? Object.keys(dailyMarketValue).map(formatDate).sort()
+    : (isPnlMetric && Object.keys(dailyMarketValue).length)
+    ? Object.keys(dailyMarketValue).map(formatDate).sort()
+    : [...new Set(trades.map((t) => formatDate(t.datetime.split(" ")[0])))].sort();
   if (isPnlMetric) {
     for (const [code, info] of Object.entries(byCode)) {
       let snapshot = { shares: 0, cost: 0, realized: 0 };
       let previousMarketValue = 0;
-      for (const date of dates) {
+      for (const [index, date] of dates.entries()) {
         snapshot = snapshots[code]?.[date] || snapshot;
-        let marketValue = dailyMarketValue[date.replace(/-/g, "")]?.[code] || 0;
+        let marketValue = dailyMarketValue[date]?.[code] || 0;
         if (date === dates[dates.length - 1] && quotes[code]?.price) {
           marketValue = quotes[code].price * snapshot.shares;
         }
@@ -252,19 +263,44 @@ export function aggregateByDate(trades, metric = "amount", calculationTrades = t
         if (metric === "cumulative_pnl") {
           info.data[date] = snapshot.realized + floating;
         } else {
-          const previousValue = previousMarketValue;
-          info.data[date] = marketValue - previousValue + (cashFlowByCode[code]?.[date] || 0);
+          if (index === 0) {
+            info.data[date] = 0;
+          } else {
+            info.data[date] = marketValue - previousMarketValue + (cashFlowByCode[code]?.[date] || 0);
+          }
           previousMarketValue = marketValue;
         }
       }
     }
   }
 
+  const currentShares = {};
+  for (const trade of calculationTrades) {
+    if (isReverseRepo(trade.code)) continue;
+    currentShares[trade.code] = (currentShares[trade.code] || 0) + (trade.side === "买入" ? trade.quantity : -trade.quantity);
+  }
+  const latestKey = dates.at(-1);
   const series = Object.entries(byCode).map(([code, info]) => ({
     code,
     name: info.name,
     color: info.color,
-    data: dates.map((d) => info.data[d] || 0),
+    data: metric === "quantity"
+      ? (() => {
+          let shares = 0;
+          return dates.map((date) => {
+            shares = quantitySnapshots[code]?.[date] ?? shares;
+            return shares;
+          });
+        })()
+      : dates.map((date) => {
+          if (isAmountMetric) {
+        if (date === latestKey && quotes[code]?.price) {
+          return quotes[code].price * (currentShares[code] || 0);
+        }
+        return dailyMarketValue[date]?.[code] || 0;
+      }
+      return info.data[date] || 0;
+    }),
   }));
   return { dates: dates.map(formatDate), series };
 }

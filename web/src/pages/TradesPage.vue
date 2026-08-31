@@ -802,15 +802,16 @@ const lineChartOption = computed(() => {
       name: s.name,
       color: s.color,
       data: dates.map((d) => {
-        const formatted = d.replace(/-/g, "");
-        return dailyMv.value[formatted]?.[s.code] || 0;
+        return dailyMv.value[d]?.[s.code] || 0;
       }),
     }));
   } else if (chartMetric.value === "daily_pnl" || chartMetric.value === "cumulative_pnl") {
     // 盈亏模式已经是每日收盘市值减移动平均持仓成本的快照。
     cumSeries = series;
+  } else if (chartMetric.value === "quantity") {
+    cumSeries = series;
   } else {
-    // 数量/手续费: 累计值
+    // 手续费: 累计值
     cumSeries = series.map((s) => {
       let cum = 0;
       return {
