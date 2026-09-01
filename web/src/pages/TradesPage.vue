@@ -384,9 +384,9 @@ onMounted(() => {
 // ============ 分页 ============
 const pagination = reactive({
   page: 1,
-  pageSize: 50,
+  pageSize: 20,
   showSizePicker: true,
-  pageSizes: [20, 50, 100, 200],
+  pageSizes: [10, 20, 50, 100, 200],
   showQuickJumper: true,
   onChange: (page) => {
     pagination.page = page;
@@ -1293,15 +1293,15 @@ const columns = [
         row.code === "518880"
           ? ` ¥${(price / goldPerShare.value).toFixed(2)}/g`
           : "";
-      const targetText = (price, className) =>
+      const targetText = (price, className, showCny = true) =>
         h("span", { class: className }, [
           price.toFixed(3),
-          h("span", { class: "holding-sub" }, cny(price)),
+          showCny ? h("span", { class: "holding-sub" }, cny(price)) : null,
         ]);
       const trigger = h("span", { class: "suggested-price-cell" }, [
-        targetText(buyPrice, "amount-positive"),
+        targetText(buyPrice, "amount-positive", false),
         " / ",
-        targetText(sellPrice, "amount-negative"),
+        targetText(sellPrice, "amount-negative", false),
       ]);
       const levels = [1, 3, 5, 7];
       return h(
@@ -1341,16 +1341,18 @@ const columns = [
   {
     title: "浮动盈亏",
     key: "floatPnl",
-    width: 100,
+    width: 145,
     render: (row) => {
       if (hideAmount.value) return "***";
       const cur = props.quotes[row.code]?.price;
-      if (!cur) return "--";
-      const pnl =
-        (cur - row.price) * row.quantity * (row.side === "买入" ? 1 : -1);
+      if (!cur || !(row.price > 0)) return "--";
+      const direction = row.side === "买入" ? 1 : -1;
+      const pnl = (cur - row.price) * row.quantity * direction;
+      const pct = ((cur - row.price) / row.price) * 100 * direction;
       const cls = pnl >= 0 ? "amount-positive" : "amount-negative";
-      const sign = pnl >= 0 ? "+" : "";
-      return h("span", { class: cls }, sign + formatMoney(pnl));
+      const pnlSign = pnl >= 0 ? "+" : "";
+      const pctSign = pct >= 0 ? "+" : "";
+      return h("span", { class: cls }, `${pnlSign}${formatMoney(pnl)} (${pctSign}${pct.toFixed(2)}%)`);
     },
   },
   {
