@@ -193,6 +193,7 @@ import {
   NInput,
   NDatePicker,
   NCheckbox,
+  NPopover,
 } from "naive-ui";
 import VChart from "vue-echarts";
 import { use } from "echarts/core";
@@ -1279,42 +1280,61 @@ const columns = [
   {
     title: "建议价",
     key: "suggestedPrice",
-    width: 100,
+    width: 120,
     render: (row) => {
       if (isReverseRepo(row.code)) return "--";
       if (hideAmount.value) return "***";
       const profile = holdingProfiles.value[row.code] || {};
       const rise = Number(profile.rise_pct ?? 5) / 100;
       const fall = Number(profile.fall_pct ?? 5) / 100;
-      const suggested =
-        row.side === "买入" ? row.price * (1 + rise) : row.price * (1 - fall);
-      if (!(suggested > 0)) return "--";
-      const cny =
+      const buyPrice = row.price * (1 - fall);
+      const sellPrice = row.price * (1 + rise);
+      const cny = (price) =>
         row.code === "518880"
-          ? ` ¥${(suggested / goldPerShare.value).toFixed(2)}/g`
+          ? ` ¥${(price / goldPerShare.value).toFixed(2)}/g`
           : "";
-      return h("span", {}, [
-        suggested.toFixed(3),
-        h("span", { class: "holding-sub" }, cny),
+      const targetText = (price, className) =>
+        h("span", { class: className }, [
+          price.toFixed(3),
+          h("span", { class: "holding-sub" }, cny(price)),
+        ]);
+      const trigger = h("span", { class: "suggested-price-cell" }, [
+        targetText(buyPrice, "amount-positive"),
+        " / ",
+        targetText(sellPrice, "amount-negative"),
       ]);
+      const levels = [1, 3, 5, 7];
+      return h(
+        NPopover,
+        { trigger: "hover", placement: "top", showArrow: false },
+        {
+          trigger: () => trigger,
+          default: () =>
+            h("div", { class: "suggested-price-popover" }, [
+              h("div", { class: "suggested-price-popover-title" }, [
+                "均价 ",
+                row.price.toFixed(3),
+                h("span", { class: "holding-sub" }, cny(row.price)),
+              ]),
+              ...levels.map((level) => {
+                const ratio = level / 100;
+                const lower = row.price * (1 - ratio);
+                const upper = row.price * (1 + ratio);
+                return h("div", { class: "suggested-price-popover-row" }, [
+                  h("span", `±${level}%`),
+                  targetText(lower, "amount-positive"),
+                  targetText(upper, "amount-negative"),
+                ]);
+              }),
+            ]),
+        },
+      );
     },
     sorter: (a, b) => {
       const profileA = holdingProfiles.value[a.code] || {};
       const profileB = holdingProfiles.value[b.code] || {};
-      const valueA =
-        a.price *
-        (1 +
-          (a.side === "买入"
-            ? Number(profileA.rise_pct ?? 5)
-            : -Number(profileA.fall_pct ?? 5)) /
-            100);
-      const valueB =
-        b.price *
-        (1 +
-          (b.side === "买入"
-            ? Number(profileB.rise_pct ?? 5)
-            : -Number(profileB.fall_pct ?? 5)) /
-            100);
+      const valueA = a.price * (1 + Number(profileA.rise_pct ?? 5) / 100);
+      const valueB = b.price * (1 + Number(profileB.rise_pct ?? 5) / 100);
       return valueA - valueB;
     },
   },
