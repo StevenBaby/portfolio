@@ -191,14 +191,56 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .converter-grid {
+  .converter-grid,
+  .target-price-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .target-price-grid > .converter-arrow {
+    justify-self: start;
+    padding: 0;
+    transform: none;
   }
 
   .converter-arrow {
     padding: 0;
     transform: rotate(90deg);
   }
+}
+
+.target-price-tool {
+  max-width: 720px;
+}
+
+.target-price-grid {
+  display: grid;
+  grid-template-columns: 220px 150px 24px minmax(150px, max-content);
+  gap: 12px;
+  align-items: end;
+}
+
+.target-price-grid > .converter-arrow {
+  align-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0;
+}
+
+.target-price-inline {
+  align-self: end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0;
+  font-size: 18px;
+  white-space: nowrap;
+}
+
+.target-price-inline > span {
+  color: #666;
 }
 
 .chart-container {

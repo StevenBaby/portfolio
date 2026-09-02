@@ -59,13 +59,53 @@
           </div>
         </div>
       </section>
+
+      <section class="tool-panel target-price-tool">
+        <div class="tool-panel-heading">
+          <div class="tool-panel-title">目标价格计算</div>
+        </div>
+        <div class="target-price-grid">
+          <div class="converter-field">
+            <label for="target-base-price">基准价格</label>
+            <div class="input-unit">
+              <n-input
+                id="target-base-price"
+                v-model:value="basePrice"
+                type="text"
+                placeholder="例如 10.000"
+                :input-props="{ inputmode: 'decimal' }"
+              />
+            </div>
+          </div>
+          <div class="converter-field target-pct-field">
+            <label for="target-pct">涨跌幅</label>
+            <div class="input-unit">
+              <n-select
+                id="target-pct"
+                v-model:value="targetPct"
+                :options="targetPctOptions"
+                tag
+                filterable
+                clearable
+                placeholder="选择或输入，例如 5"
+              />
+            </div>
+          </div>
+          <div class="converter-arrow">=</div>
+          <div class="target-price-inline">
+            <strong class="amount-positive">{{ targetPrices.down }}</strong>
+            <span>/</span>
+            <strong class="amount-negative">{{ targetPrices.up }}</strong>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, ref } from "vue";
-import { NInput } from "naive-ui";
+import { NInput, NSelect } from "naive-ui";
 import { goldPerShare, loadGoldPerShare, saveGoldPerShare } from "../parse.js";
 
 const defaultGoldPerShare = 0.00951;
@@ -76,6 +116,23 @@ const goldPerShareBeforeEdit = ref(defaultGoldPerShare);
 const goldPerShareLabel = computed(() => goldPerShare.value.toFixed(5));
 const etfPrice = ref("");
 const shanghaiGoldPrice = ref("");
+const basePrice = ref("");
+const targetPctOptions = [1, 3, 5, 7, 9].map((value) => ({
+  label: String(value),
+  value: String(value),
+}));
+const targetPct = ref("5");
+const targetPrices = computed(() => {
+  const base = validNumber(basePrice.value);
+  const pct = Number(targetPct.value);
+  if (base === null || !Number.isFinite(pct) || pct < 0) {
+    return { down: "--", up: "--" };
+  }
+  return {
+    down: (base * (1 - pct / 100)).toFixed(3),
+    up: (base * (1 + pct / 100)).toFixed(3),
+  };
+});
 
 function validNumber(value) {
   const number = Number(String(value).trim());
