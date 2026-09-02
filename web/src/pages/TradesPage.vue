@@ -217,6 +217,7 @@ import {
   isReverseRepo,
   holdingProfiles,
   goldPerShare,
+  calcTotalPnl,
 } from "../parse.js";
 
 use([
@@ -1151,9 +1152,9 @@ const filteredPnl = computed(() => {
       0,
     );
   }
-  return calcPnl(filteredTrades.value);
+  return calcTotalPnl(filteredTrades.value, props.quotes);
 });
-const totalPnl = computed(() => calcPnl(props.trades));
+const totalPnl = computed(() => calcTotalPnl(props.trades, props.quotes));
 const filteredPnlResult = computed(() =>
   pnlFormat(filteredPnl.value, hideAmount.value),
 );

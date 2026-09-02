@@ -18,6 +18,12 @@
         </div>
       </div>
       <div class="stat-card">
+        <div class="stat-label">总市值</div>
+        <div class="stat-value">
+          {{ displayData(grandTotalMarketValue, hideAmount, (v) => "¥" + v.toFixed(2), "***") }}
+        </div>
+      </div>
+      <div class="stat-card">
         <div class="stat-label">总成本</div>
         <div class="stat-value" @dblclick="editTotalCost" style="cursor:pointer">
           <template v-if="editingTotalCost">
@@ -93,6 +99,7 @@ import {
   loadTotalCost,
   saveTotalCost,
   goldPerShare,
+  calcTotalPnl,
 } from "../parse.js";
 
 use([CanvasRenderer, PieChart, LegendComponent, TooltipComponent]);
@@ -115,6 +122,7 @@ const pieMetricOptions = [
 const props = defineProps({
   holdings: { type: Array, default: () => [] },
   quotes: { type: Object, default: () => ({}) },
+  trades: { type: Array, default: () => [] },
 });
 
 const showCleared = persistedRef("holdings_showCleared", false);
@@ -157,7 +165,10 @@ const totalMarketValue = computed(() =>
     .reduce((s, h) => s + h.marketValue, 0)
 );
 const totalFloatPnl = computed(
-  () => totalMarketValue.value - totalHoldingCost.value
+  () => calcTotalPnl(props.trades, props.quotes)
+);
+const grandTotalMarketValue = computed(
+  () => globalTotalCost.value + totalFloatPnl.value
 );
 const totalPnlResult = computed(() =>
   pnlFormat(totalFloatPnl.value, hideAmount.value)

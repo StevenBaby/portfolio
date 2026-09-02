@@ -196,6 +196,50 @@ export function isReverseRepo(code) {
 }
 
 /**
+ * 计算总盈亏（含已实现+浮动+逆回购），与明细页同口径
+ * trades: 交易流水数组
+ * quotes: 行情对象 { code: { price: number } }
+ */
+export function calcTotalPnl(trades, quotes) {
+  const byCode = {};
+  const repoPairs = {};
+  for (const t of trades) {
+    if (isReverseRepo(t.code)) {
+      const contract = t.contract || t.datetime;
+      if (!repoPairs[contract]) repoPairs[contract] = {};
+      if (t.net < 0) {
+        repoPairs[contract].lend = Math.abs(t.net);
+      } else {
+        repoPairs[contract].collect = t.amount - t.fee;
+      }
+      continue;
+    }
+    if (!byCode[t.code])
+      byCode[t.code] = { shares: 0, buyCost: 0, sellIncome: 0 };
+    const g = byCode[t.code];
+    if (t.side === "买入") {
+      g.shares += t.quantity;
+      g.buyCost += t.amount + t.fee;
+    } else {
+      g.shares -= t.quantity;
+      g.sellIncome += t.amount - t.fee;
+    }
+  }
+  let pnl = 0;
+  for (const [code, g] of Object.entries(byCode)) {
+    const price = quotes[code]?.price || 0;
+    const marketValue = price * g.shares;
+    pnl += g.sellIncome + marketValue - g.buyCost;
+  }
+  for (const pair of Object.values(repoPairs)) {
+    if (pair.lend != null && pair.collect != null) {
+      pnl += pair.collect - pair.lend;
+    }
+  }
+  return pnl;
+}
+
+/**
  * 判断交易方向类型
  */
 export function getTradeType(record) {

@@ -38,6 +38,7 @@
             ref="holdingsRef"
             :holdings="holdings"
             :quotes="quotes"
+            :trades="trades"
           />
         </div>
       </div>
