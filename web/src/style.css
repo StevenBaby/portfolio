@@ -243,6 +243,14 @@ body {
   color: #666;
 }
 
+.trade-row-hit-buy td {
+  background-color: rgba(208, 48, 80, 0.12) !important;
+}
+
+.trade-row-hit-sell td {
+  background-color: rgba(24, 160, 88, 0.12) !important;
+}
+
 .chart-container {
   flex-shrink: 0;
   padding-top: 8px;

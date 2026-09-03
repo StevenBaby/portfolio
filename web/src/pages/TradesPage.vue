@@ -120,6 +120,7 @@
       :striped="true"
       size="small"
       :row-key="rowKey"
+      :row-class-name="tradeRowClass"
       flex-height
       style="flex: 1"
     />
@@ -1164,6 +1165,20 @@ const totalPnlResult = computed(() =>
 
 // ============ 表格列定义 ============
 const rowKey = (row, index) => index;
+
+function tradeRowClass(row) {
+  if (isReverseRepo(row.code) || !row.price) return "";
+  const cur = props.quotes[row.code]?.price;
+  if (!cur) return "";
+  const profile = holdingProfiles.value[row.code] || {};
+  const rise = Number(profile.rise_pct ?? 5) / 100;
+  const fall = Number(profile.fall_pct ?? 5) / 100;
+  const buyTarget = row.price * (1 - fall);
+  const sellTarget = row.price * (1 + rise);
+  if (row.side === "买入" && cur >= sellTarget) return "trade-row-hit-buy";
+  if (row.side === "卖出" && cur <= buyTarget) return "trade-row-hit-sell";
+  return "";
+}
 
 function sideTag(side, code) {
   if (side === "买入")
