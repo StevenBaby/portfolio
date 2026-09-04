@@ -66,6 +66,16 @@
         size="small"
         style="width: 120px"
       />
+      <n-select
+        v-model:value="netModes"
+        :options="netModeOptions"
+        multiple
+        clearable
+        max-tag-count="responsive"
+        placeholder="净交易"
+        size="small"
+        style="width: 150px"
+      />
       <n-input
         v-model:value="searchText"
         placeholder="搜索代码/名称..."
@@ -77,7 +87,6 @@
         >日期范围</n-checkbox
       >
       <n-checkbox v-model:checked="hideAmount">隐藏信息</n-checkbox>
-      <n-checkbox v-model:checked="netOnly">净交易</n-checkbox>
       <n-checkbox v-model:checked="invertOnly">反选</n-checkbox>
       <n-checkbox v-model:checked="showCleared">显示已清仓</n-checkbox>
     </div>
@@ -341,7 +350,7 @@ const summaryPriceDate = computed(() => {
 });
 const todayDate = (() => {
   const now = new Date();
-  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 })();
 const isMarketOpenDate = computed(() => summaryPriceDate.value === todayDate);
 const sharesAtDate = computed(() => {
@@ -350,7 +359,7 @@ const sharesAtDate = computed(() => {
   for (const trade of props.trades) {
     if (
       isReverseRepo(trade.code) ||
-      (cutoff && trade.datetime.split(" ")[0] > cutoff)
+      (cutoff && formatDate(trade.datetime.split(" ")[0]) > cutoff)
     )
       continue;
     shares[trade.code] =
@@ -488,7 +497,13 @@ const sideOptions = [
 ];
 
 // ============ 筛选后的数据 ============
-const netOnly = persistedRef("trades_netOnly", false);
+const netModes = persistedRef("trades_netModes", []);
+const netModeOptions = [
+  { value: "profitable_clear", label: "盈利清仓" },
+  { value: "perfect_t0", label: "完美 T+0" },
+  { value: "nearest", label: "就近抵消" },
+  { value: "global", label: "全局抵消" },
+];
 const invertOnly = persistedRef("trades_invertOnly", false);
 
 function tradeDateMatches(trade) {
@@ -499,12 +514,7 @@ function tradeDateMatches(trade) {
     return time >= start && time <= end;
   }
   if (!isDateRange.value && dateSingle.value) {
-    return (
-      date ===
-      formatDate(
-        new Date(dateSingle.value).toISOString().slice(0, 10).replace(/-/g, ""),
-      )
-    );
+    return date === formatTs(dateSingle.value);
   }
   return true;
 }
@@ -545,102 +555,120 @@ function matchesTradeFilters(trade) {
   return invertOnly.value && hasFilter ? !matches : matches;
 }
 
+function tradeTimestamp(trade) {
+  const [rawDate, rawTime = "00:00:00"] = trade.datetime.split(" ");
+  const date = formatDate(rawDate);
+  return new Date(`${date}T${rawTime}`).getTime();
+}
+
+function tradeNetProfit(buy, sell) {
+  return sell.amount - sell.fee - (buy.amount + buy.fee);
+}
+
+function removePerfectT0(trades, removed) {
+  const groups = {};
+  for (const trade of trades) {
+    if (removed.has(trade)) continue;
+    const key = `${trade.datetime.split(" ")[0]}-${trade.code}`;
+    if (!groups[key]) groups[key] = { buys: [], sells: [] };
+    groups[key][trade.side === "买入" ? "buys" : "sells"].push(trade);
+  }
+  for (const { buys, sells } of Object.values(groups)) {
+    const buyQty = buys.reduce((sum, trade) => sum + trade.quantity, 0);
+    const sellQty = sells.reduce((sum, trade) => sum + trade.quantity, 0);
+    const buyCost = buys.reduce((sum, trade) => sum + trade.amount + trade.fee, 0);
+    const sellIncome = sells.reduce((sum, trade) => sum + trade.amount - trade.fee, 0);
+    if (buyQty > 0 && buyQty === sellQty && sellIncome > buyCost) {
+      buys.forEach((trade) => removed.add(trade));
+      sells.forEach((trade) => removed.add(trade));
+    }
+  }
+}
+
+function removeNearestPairs(trades, removed) {
+  const byCode = {};
+  for (const trade of trades) {
+    if (!byCode[trade.code]) byCode[trade.code] = [];
+    byCode[trade.code].push(trade);
+  }
+  for (const codeTrades of Object.values(byCode)) {
+    const remaining = codeTrades
+      .filter((trade) => !removed.has(trade))
+      .sort((a, b) => tradeTimestamp(a) - tradeTimestamp(b));
+    let index = 0;
+    while (index < remaining.length - 1) {
+      const first = remaining[index];
+      const second = remaining[index + 1];
+      if (first.side === second.side || first.quantity !== second.quantity) {
+        index += 1;
+        continue;
+      }
+      const buy = first.side === "买入" ? first : second;
+      const sell = first.side === "卖出" ? first : second;
+      if (tradeNetProfit(buy, sell) <= 0) {
+        index += 1;
+        continue;
+      }
+      removed.add(first);
+      removed.add(second);
+      remaining.splice(index, 2);
+      index = Math.max(0, index - 1);
+    }
+  }
+}
+
+function removeTradePairs(trades, removed, scorePair) {
+  while (true) {
+    let bestPair = null;
+    let bestScore = Infinity;
+    const remaining = trades.filter((trade) => !removed.has(trade));
+    for (const buy of remaining) {
+      if (buy.side !== "买入") continue;
+      for (const sell of remaining) {
+        if (
+          sell.side !== "卖出" ||
+          sell.code !== buy.code ||
+          sell.quantity !== buy.quantity
+        ) continue;
+        const profit = tradeNetProfit(buy, sell);
+        if (profit <= 0) continue;
+        const score = scorePair(buy, sell, profit);
+        if (score < bestScore) {
+          bestScore = score;
+          bestPair = [buy, sell];
+        }
+      }
+    }
+    if (!bestPair) break;
+    bestPair.forEach((trade) => removed.add(trade));
+  }
+}
+
 const filteredTrades = computed(() => {
   const result = props.trades.filter((trade) => {
     if (!showCleared.value && clearedCodes.value.has(trade.code)) return false;
     return matchesTradeFilters(trade);
   });
-  if (!netOnly.value) return result;
+  if (!netModes.value.length) return result;
 
-  const netBase = result.filter(
-    (trade) => !profitableClearedTrades.value.has(trade),
-  );
-  const preRemoved = result.filter((trade) =>
-    profitableClearedTrades.value.has(trade),
-  );
-
-  // 净交易：分两轮配对
-  const nonRepo = netBase.filter((t) => !isReverseRepo(t.code));
+  const modes = new Set(netModes.value);
+  const nonRepo = result.filter((trade) => !isReverseRepo(trade.code));
   const removed = new Set();
 
-  // 第一轮：日内 T+0 配对
-  // 按日期分组，同日同代码买入总价+双边手续费 < 卖出总价且数量相等
-  const byDate = {};
-  for (const t of nonRepo) {
-    const d = t.datetime.split(" ")[0];
-    if (!byDate[d]) byDate[d] = {};
-    if (!byDate[d][t.code]) byDate[d][t.code] = { buys: [], sells: [] };
-    if (t.side === "买入") byDate[d][t.code].buys.push(t);
-    else if (t.side === "卖出") byDate[d][t.code].sells.push(t);
+  if (modes.has("profitable_clear")) {
+    nonRepo
+      .filter((trade) => profitableClearedTrades.value.has(trade))
+      .forEach((trade) => removed.add(trade));
   }
-  for (const dayMap of Object.values(byDate)) {
-    for (const { buys, sells } of Object.values(dayMap)) {
-      const buyQty = buys.reduce((s, b) => s + b.quantity, 0);
-      const sellQty = sells.reduce((s, s2) => s + s2.quantity, 0);
-      if (buyQty > 0 && buyQty === sellQty) {
-        const buyTotal = buys.reduce((s, b) => s + b.amount + b.fee, 0);
-        const sellTotal = sells.reduce((s, s2) => s + s2.amount - s2.fee, 0);
-        const totalFees =
-          buys.reduce((s, b) => s + b.fee, 0) +
-          sells.reduce((s, s2) => s + s2.fee, 0);
-        if (buyTotal + totalFees < sellTotal) {
-          buys.forEach((b) => removed.add(b));
-          sells.forEach((s) => removed.add(s));
-        }
-      }
-    }
+  if (modes.has("perfect_t0")) removePerfectT0(nonRepo, removed);
+  if (modes.has("nearest")) removeNearestPairs(nonRepo, removed);
+  if (modes.has("global")) {
+    removeTradePairs(nonRepo, removed, (_buy, _sell, profit) => profit);
   }
 
-  // 第二轮：全局配对，买入总价+双边手续费 < 卖出总价，数量相同，价差最小优先，重复直到无配对
-  let current = nonRepo.filter((t) => !removed.has(t));
-  while (true) {
-    const byCode = {};
-    for (const t of current) {
-      if (!byCode[t.code]) byCode[t.code] = { buys: [], sells: [] };
-      if (t.side === "买入") byCode[t.code].buys.push(t);
-      else if (t.side === "卖出") byCode[t.code].sells.push(t);
-    }
-    const removeSet = new Set();
-    for (const { buys, sells } of Object.values(byCode)) {
-      const usedBuys = new Set();
-      const usedSells = new Set();
-      for (const buy of buys) {
-        if (usedBuys.has(buy)) continue;
-        let bestSell = null;
-        let bestDiff = Infinity;
-        for (const sell of sells) {
-          if (usedSells.has(sell)) continue;
-          if (sell.quantity === buy.quantity) {
-            const buyTotal = buy.amount + buy.fee;
-            const sellTotal = sell.amount - sell.fee;
-            const totalFees = buy.fee + sell.fee;
-            if (buyTotal + totalFees < sellTotal) {
-              const diff = sellTotal - buyTotal - totalFees;
-              if (diff < bestDiff) {
-                bestDiff = diff;
-                bestSell = sell;
-              }
-            }
-          }
-        }
-        if (bestSell) {
-          usedBuys.add(buy);
-          usedSells.add(bestSell);
-          removeSet.add(buy);
-          removeSet.add(bestSell);
-        }
-      }
-    }
-    if (removeSet.size === 0) break;
-    removeSet.forEach((t) => removed.add(t));
-    current = current.filter((t) => !removeSet.has(t));
-  }
-
-  // 反选：显示前置阶段和两轮配对移除的交易（补集）
-  if (invertOnly.value) {
-    return [...preRemoved, ...nonRepo.filter((t) => removed.has(t))];
-  }
-  return nonRepo.filter((t) => !removed.has(t));
+  return invertOnly.value
+    ? nonRepo.filter((trade) => removed.has(trade))
+    : nonRepo.filter((trade) => !removed.has(trade));
 });
 
 // ============ 交易汇总 ============
@@ -1091,7 +1119,7 @@ const formatTs = (ts) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
-  return `${y}${m}${day}`;
+  return `${y}-${m}-${day}`;
 };
 const displayDateStart = computed(() => {
   if (isDateRange.value && dateRange.value && dateRange.value[0])
