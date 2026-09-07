@@ -501,9 +501,13 @@ const netModes = persistedRef("trades_netModes", []);
 const netModeOptions = [
   { value: "profitable_clear", label: "盈利清仓" },
   { value: "perfect_t0", label: "完美 T+0" },
-  { value: "nearest", label: "就近抵消" },
-  { value: "global", label: "全局抵消" },
+  { value: "adjacent", label: "相邻交易" },
+  { value: "adjacent_group", label: "相邻组合" },
+  { value: "time_nearest", label: "时间最近" },
+  { value: "spread_min", label: "利差最小" },
 ];
+const legacyNetModeMap = { nearest: "adjacent", global: "time_nearest" };
+netModes.value = netModes.value.map((mode) => legacyNetModeMap[mode] || mode);
 const invertOnly = persistedRef("trades_invertOnly", false);
 
 function tradeDateMatches(trade) {
@@ -617,10 +621,81 @@ function removeNearestPairs(trades, removed) {
   }
 }
 
-function removeTradePairs(trades, removed, scorePair) {
+function removeAdjacentGroups(trades, removed) {
+  const byCode = {};
+  for (const trade of trades) {
+    if (!byCode[trade.code]) byCode[trade.code] = [];
+    byCode[trade.code].push(trade);
+  }
+  for (const codeTrades of Object.values(byCode)) {
+    const remaining = codeTrades
+      .filter((trade) => !removed.has(trade))
+      .sort((a, b) => tradeTimestamp(a) - tradeTimestamp(b));
+    let index = 0;
+    while (index < remaining.length - 1) {
+      const firstSide = remaining[index].side;
+      let end = index;
+      const firstGroup = [];
+      while (end < remaining.length && remaining[end].side === firstSide) {
+        firstGroup.push(remaining[end]);
+        end += 1;
+      }
+      const secondGroup = [];
+      while (end < remaining.length && remaining[end].side !== firstSide) {
+        secondGroup.push(remaining[end]);
+        end += 1;
+      }
+      if (!secondGroup.length) break;
+      const firstQty = firstGroup.reduce((sum, trade) => sum + trade.quantity, 0);
+      const secondQty = secondGroup.reduce((sum, trade) => sum + trade.quantity, 0);
+      const buy = firstSide === "买入" ? firstGroup : secondGroup;
+      const sell = firstSide === "卖出" ? firstGroup : secondGroup;
+      const profit =
+        sell.reduce((sum, trade) => sum + trade.amount - trade.fee, 0) -
+        buy.reduce((sum, trade) => sum + trade.amount + trade.fee, 0);
+      if (firstQty === secondQty && firstQty > 0 && profit > 0) {
+        [...firstGroup, ...secondGroup].forEach((trade) => removed.add(trade));
+        remaining.splice(index, firstGroup.length + secondGroup.length);
+        index = Math.max(0, index - 1);
+      } else {
+        index += 1;
+      }
+    }
+  }
+}
+
+function removeGlobalPairs(trades, removed) {
+  while (true) {
+    const remaining = trades
+      .filter((trade) => !removed.has(trade))
+      .sort((a, b) => tradeTimestamp(b) - tradeTimestamp(a));
+    let selectedPair = null;
+    for (const anchor of remaining) {
+      const candidates = remaining.filter((trade) => {
+        if (trade === anchor || trade.code !== anchor.code) return false;
+        if (trade.quantity !== anchor.quantity || trade.side === anchor.side) return false;
+        const buy = anchor.side === "买入" ? anchor : trade;
+        const sell = anchor.side === "卖出" ? anchor : trade;
+        return tradeNetProfit(buy, sell) > 0;
+      });
+      if (!candidates.length) continue;
+      candidates.sort(
+        (a, b) =>
+          Math.abs(tradeTimestamp(a) - tradeTimestamp(anchor)) -
+          Math.abs(tradeTimestamp(b) - tradeTimestamp(anchor)),
+      );
+      selectedPair = [anchor, candidates[0]];
+      break;
+    }
+    if (!selectedPair) break;
+    selectedPair.forEach((trade) => removed.add(trade));
+  }
+}
+
+function removeSpreadMinPairs(trades, removed) {
   while (true) {
     let bestPair = null;
-    let bestScore = Infinity;
+    let bestProfit = Infinity;
     const remaining = trades.filter((trade) => !removed.has(trade));
     for (const buy of remaining) {
       if (buy.side !== "买入") continue;
@@ -631,10 +706,8 @@ function removeTradePairs(trades, removed, scorePair) {
           sell.quantity !== buy.quantity
         ) continue;
         const profit = tradeNetProfit(buy, sell);
-        if (profit <= 0) continue;
-        const score = scorePair(buy, sell, profit);
-        if (score < bestScore) {
-          bestScore = score;
+        if (profit > 0 && profit < bestProfit) {
+          bestProfit = profit;
           bestPair = [buy, sell];
         }
       }
@@ -661,10 +734,10 @@ const filteredTrades = computed(() => {
       .forEach((trade) => removed.add(trade));
   }
   if (modes.has("perfect_t0")) removePerfectT0(nonRepo, removed);
-  if (modes.has("nearest")) removeNearestPairs(nonRepo, removed);
-  if (modes.has("global")) {
-    removeTradePairs(nonRepo, removed, (_buy, _sell, profit) => profit);
-  }
+  if (modes.has("adjacent")) removeNearestPairs(nonRepo, removed);
+  if (modes.has("adjacent_group")) removeAdjacentGroups(nonRepo, removed);
+  if (modes.has("time_nearest")) removeGlobalPairs(nonRepo, removed);
+  if (modes.has("spread_min")) removeSpreadMinPairs(nonRepo, removed);
 
   return invertOnly.value
     ? nonRepo.filter((trade) => removed.has(trade))
