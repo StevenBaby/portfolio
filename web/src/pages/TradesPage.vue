@@ -1420,7 +1420,7 @@ const columns = [
         " / ",
         targetText(sellPrice, "amount-negative", false),
       ]);
-      const levels = [1, 3, 5, 7];
+      const levels = [1, 2, 3, 4, 5, 6, 7];
       return h(
         NPopover,
         { trigger: "hover", placement: "top", showArrow: false },
